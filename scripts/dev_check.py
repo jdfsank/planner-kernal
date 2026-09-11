@@ -15,7 +15,7 @@ sys.path[:0] = [str(ROOT / 'scripts'), str(ROOT)]
 
 TASK_CONFIG = {
     'CONTRACTS': {
-        'self_check': 'checks/TASK-CONTRACTS-001/R002/单元自检.shell',
+        'self_check': 'checks/TASK-CONTRACTS-001/R002/self-check.sh',
         'test_module': 'tests.test_contracts',
         'test_source': 'tests/test_contracts.py',
         'tested_paths': [
@@ -26,7 +26,7 @@ TASK_CONFIG = {
         ],
     },
     'CHECKS': {
-        'self_check': 'checks/TASK-CHECKS-001/R002/单元自检.shell',
+        'self_check': 'checks/TASK-CHECKS-001/R002/self-check.sh',
         'test_module': 'tests.test_checks',
         'test_source': 'tests/test_checks.py',
         'tested_paths': [
@@ -37,7 +37,7 @@ TASK_CONFIG = {
         ],
     },
     'STORAGE': {
-        'self_check': 'checks/TASK-STORAGE-001/R002/单元自检.shell',
+        'self_check': 'checks/TASK-STORAGE-001/R002/self-check.sh',
         'test_module': 'tests.test_storage',
         'test_source': 'tests/test_storage.py',
         'tested_paths': [
@@ -49,7 +49,7 @@ TASK_CONFIG = {
         ],
     },
     'EXECUTION': {
-        'self_check': 'checks/TASK-EXECUTION-001/R002/单元自检.shell',
+        'self_check': 'checks/TASK-EXECUTION-001/R002/self-check.sh',
         'test_module': 'tests.test_execution',
         'test_source': 'tests/test_execution.py',
         'tested_paths': [
@@ -62,7 +62,7 @@ TASK_CONFIG = {
         ],
     },
     'KERNEL': {
-        'self_check': 'checks/TASK-KERNEL-001/R002/单元自检.shell',
+        'self_check': 'checks/TASK-KERNEL-001/R002/self-check.sh',
         'test_module': 'tests.test_kernel',
         'test_source': 'tests/test_kernel.py',
         'tested_paths': [
@@ -74,7 +74,7 @@ TASK_CONFIG = {
         ],
     },
     'PACKETS': {
-        'self_check': 'checks/TASK-PACKETS-001/R002/单元自检.shell',
+        'self_check': 'checks/TASK-PACKETS-001/R002/self-check.sh',
         'test_module': 'tests.test_packets',
         'test_source': 'tests/test_packets.py',
         'tested_paths': [
@@ -88,7 +88,7 @@ TASK_CONFIG = {
         ],
     },
     'SKILL': {
-        'self_check': 'checks/TASK-SKILL-001/R002/单元自检.shell',
+        'self_check': 'checks/TASK-SKILL-001/R002/self-check.sh',
         'test_module': 'tests.test_skill',
         'test_source': 'tests/test_skill.py',
         'tested_paths': [
@@ -98,9 +98,9 @@ TASK_CONFIG = {
             'uv.lock',
             '.python-version',
             'scripts/planner.py',
-            'scripts/planner.shell',
-            'scripts/python.shell',
-            'scripts/setup.shell',
+            'scripts/planner.sh',
+            'scripts/python.sh',
+            'scripts/setup.sh',
             'tests/helpers.py',
             'tests/test_skill.py',
         ],

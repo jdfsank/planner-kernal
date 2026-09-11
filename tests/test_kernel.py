@@ -33,7 +33,7 @@ class KernelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             w=Workflow(d);state=w.engine.store.load_state();e=state['entities']
             for key,deps in [('TASK-002',['TASK-001']),('TASK-003',['TASK-002']),('TASK-004',[])]:
-                t=copy.deepcopy(w.task);t['id']=key;t['dependencies']=deps;t['self_check']=f'tmp_plan/checks/{key}/R001/单元自检.shell'
+                t=copy.deepcopy(w.task);t['id']=key;t['dependencies']=deps;t['self_check']=f'tmp_plan/checks/{key}/R001/self-check.sh'
                 e['tasks'][key]=t
             affected=invalidate_dependents(state,{'TASK-002'})
             self.assertEqual(affected,{'TASK-002','TASK-003'})
@@ -70,7 +70,7 @@ class KernelTests(unittest.TestCase):
             w=Workflow(d);w.passed_task()
             t=copy.deepcopy(w.engine.store.load_state()['entities']['tasks']['TASK-001'])
             t.update(revision=2,status='planned',input_validity='unknown',adaptation_status='pending',
-                     self_check='tmp_plan/checks/TASK-001/R002/单元自检.shell')
+                     self_check='tmp_plan/checks/TASK-001/R002/self-check.sh')
             w.do('revise_entity',{'entities':[{'type':'task','value':t}]})
             w.do('set_ready',{'task_id':'TASK-001'});w.do('start_task',{'task_id':'TASK-001'})
             with self.assertRaises(KernelError):w.do('request_review',{'task_id':'TASK-001'})

@@ -54,17 +54,17 @@ The project has no runtime third-party dependencies and is not installed into th
 
 ```bash
 cd /absolute/path/to/planner-kernal
-bash scripts/setup.shell
+bash scripts/setup.sh
 ```
 
-`setup.shell` creates the skill's own `.venv` using the locked configuration. It does not modify the target project's Python environment. Use the project wrappers for normal commands so the locked Python and dependencies are selected:
+`setup.sh` creates the skill's own `.venv` using the locked configuration. It does not modify the target project's Python environment. Use the project wrappers for normal commands so the locked Python and dependencies are selected:
 
 ```bash
-bash scripts/planner.shell --help
-bash scripts/python.shell -c 'import sys; print(sys.version)'
+bash scripts/planner.sh --help
+bash scripts/python.sh -c 'import sys; print(sys.version)'
 ```
 
-If `uv` is unavailable, the scripts print `BLOCKED` and exit with code `2`. If the lock file or local cache is unavailable, inspect the `uv` error and rerun `setup.shell` after repairing the environment.
+If `uv` is unavailable, the scripts print `BLOCKED` and exit with code `2`. If the lock file or local cache is unavailable, inspect the `uv` error and rerun `setup.sh` after repairing the environment.
 
 ## Quick start
 
@@ -76,7 +76,7 @@ The following workflow uses the software example shipped with this repository. T
 export PLANNER_KERNEL_HOME="/absolute/path/to/planner-kernal"
 export PROJECT_ROOT="/absolute/path/to/your-project"
 
-bash "$PLANNER_KERNEL_HOME/scripts/setup.shell"
+bash "$PLANNER_KERNEL_HOME/scripts/setup.sh"
 ```
 
 To try the example in a temporary project:
@@ -91,7 +91,7 @@ cp "$PLANNER_KERNEL_HOME/examples/software/probe.py" "$PROJECT_ROOT/"
 ### 2. Initialize explicitly
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   init --project "$PROJECT_ROOT" --explicit
 ```
 
@@ -100,7 +100,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 When the target is inside a Git worktree, initialization normally adds the matching `tmp_plan/` rule to that repository's `.git/info/exclude`; it does not modify the shared `.gitignore`. To opt out:
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   init --project "$PROJECT_ROOT" --explicit --no-git-exclude
 ```
 
@@ -109,7 +109,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 The sample `definition.json` is a `define_entity` operation containing a Goal, Stage, and Task:
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   apply --project "$PROJECT_ROOT" \
   --input "$PROJECT_ROOT/definition.json"
 ```
@@ -117,10 +117,10 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 Inspect the recovery summary and structural state:
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   resume --project "$PROJECT_ROOT"
 
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   validate --project "$PROJECT_ROOT"
 ```
 
@@ -144,7 +144,7 @@ All writes use the same operation envelope. This minimal operation makes `TASK-0
 Save it as `set-ready.json` and apply it:
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   apply --project "$PROJECT_ROOT" --input set-ready.json
 ```
 
@@ -181,7 +181,7 @@ Each operation's `expected_revision` must equal the revision returned by the pre
 After the Task is `active`, export its execution packet:
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   export-task --project "$PROJECT_ROOT" \
   --task TASK-001 \
   --output tmp_plan/packets/TASK-001.json
@@ -192,7 +192,7 @@ The packet contains the Goal, Stage, Task, bound inputs, readiness issues, self-
 The result must be written to a new path under `tmp_plan/`:
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   run-check --project "$PROJECT_ROOT" \
   --task TASK-001 \
   --task-revision 1 \
@@ -308,15 +308,15 @@ Every command requires `--project PROJECT` and prints JSON.
 
 ```bash
 # Query all Tasks
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   query --project "$PROJECT_ROOT" --type tasks
 
 # Query one Task
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   query --project "$PROJECT_ROOT" --type tasks --id TASK-001
 
 # Query PASS evidence for one Task revision
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   query --project "$PROJECT_ROOT" \
   --type evidence --subject TASK-001 --revision 1 --status PASS
 ```
@@ -325,16 +325,16 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 
 ```bash
 # Apply an operation file
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   apply --project "$PROJECT_ROOT" --input operation.json
 
 # Optionally verify that the CLI revision matches the JSON body
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   apply --project "$PROJECT_ROOT" \
   --input operation.json --expected-revision 4
 
 # Use the archive convenience command
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   archive --project "$PROJECT_ROOT" --input archive.json
 ```
 
@@ -343,7 +343,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 Every independently executable Task revision has a version-bound Bash entry point:
 
 ```text
-tmp_plan/checks/TASK-001/R001/单元自检.shell
+tmp_plan/checks/TASK-001/R001/self-check.sh
 ```
 
 A check definition includes:
@@ -396,9 +396,9 @@ planner-kernal/
 ├── SKILL.md                         # Codex skill definition and boundaries
 ├── agents/openai.yaml               # UI metadata and explicit activation policy
 ├── scripts/
-│   ├── planner.shell                # CLI launcher
-│   ├── python.shell                 # locked Python/uv runner
-│   ├── setup.shell                  # local development environment setup
+│   ├── planner.sh                # CLI launcher
+│   ├── python.sh                 # locked Python/uv runner
+│   ├── setup.sh                  # local development environment setup
 │   ├── planner.py                   # Python CLI entry point
 │   ├── dev_check.py                 # development task-check entry point
 │   └── planner_kernel/              # core implementation
@@ -418,25 +418,25 @@ planner-kernal/
 Set up the development environment:
 
 ```bash
-bash scripts/setup.shell
+bash scripts/setup.sh
 ```
 
 Run the full test suite:
 
 ```bash
-bash scripts/python.shell -m unittest discover -s tests -t .
+bash scripts/python.sh -m unittest discover -s tests -t .
 ```
 
 Run one test module:
 
 ```bash
-bash scripts/python.shell -m unittest tests.test_kernel
+bash scripts/python.sh -m unittest tests.test_kernel
 ```
 
 Run one of the skill's development checks:
 
 ```bash
-bash checks/TASK-KERNEL-001/R002/单元自检.shell \
+bash checks/TASK-KERNEL-001/R002/self-check.sh \
   --result /tmp/planner-kernal-kernel-check.json
 ```
 
@@ -453,7 +453,7 @@ Initialization lacks explicit authorization. After confirming that the current u
 The target has no runtime state. Run:
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   init --project "$PROJECT_ROOT" --explicit
 ```
 
@@ -474,7 +474,7 @@ The operation has no valid execution session or another session owns execution. 
 Install `uv` and run:
 
 ```bash
-bash scripts/setup.shell
+bash scripts/setup.sh
 ```
 
 The locked runner uses offline mode. If the local cache is incomplete, repair the `uv` environment and retry.

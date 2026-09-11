@@ -136,7 +136,7 @@ class Store:
                     require(path.is_file() and path.read_bytes() == data, 'Immutable artifact conflict: ' + str(path), 'CONFLICT')
                 else:
                     write_new(path, data)
-                if path.suffix=='.shell': os.chmod(path,0o755)
+                if path.suffix=='.sh': os.chmod(path,0o755)
             self._replace_state(new)
             return response
 

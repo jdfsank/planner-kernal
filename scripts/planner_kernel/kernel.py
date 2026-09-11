@@ -34,7 +34,7 @@ def validate_packet(task):
     validate_document(task,'task')
     modules={m['id']:m for m in task['modules']}; checks={c['id']:c for c in task['checks']}
     require(len(modules)==len(task['modules']) and len(checks)==len(task['checks']), 'Duplicate module/check IDs')
-    require(task['self_check']==f"tmp_plan/checks/{task['id']}/R{task['revision']:03d}/单元自检.shell", 'Wrong revision-bound self-check path')
+    require(task['self_check']==f"tmp_plan/checks/{task['id']}/R{task['revision']:03d}/self-check.sh", 'Wrong revision-bound self-check path')
     for key,module in modules.items():
         own={c['id'] for c in checks.values() if key in c['module_ids']}
         require(set(module['check_ids']) == own, 'Module/check mapping is not reciprocal: '+key)
@@ -178,11 +178,11 @@ def invalidate_dependents(state, direct):
 
 def shell_bytes(task):
     return ('#!/usr/bin/env bash\nset -euo pipefail\n'
-            'if [[ -z "${PLANNER_KERNEL_HOME:-}" ]] || [[ ! -f "$PLANNER_KERNEL_HOME/scripts/planner.shell" ]]; then\n'
+            'if [[ -z "${PLANNER_KERNEL_HOME:-}" ]] || [[ ! -f "$PLANNER_KERNEL_HOME/scripts/planner.sh" ]]; then\n'
             '  printf \'%s\\n\' \'{"status":"BLOCKED","exit_code":2,"error":"Set PLANNER_KERNEL_HOME to the uv-enabled skill"}\'\n'
             '  exit 2\n'
             'fi\n'
-            'exec bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" run-check '
+            'exec bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" run-check '
             f'--task "{task["id"]}" --task-revision {task["revision"]} "$@"\n').encode()
 
 
@@ -260,7 +260,7 @@ def apply_domain(engine,state,pending,operation):
                 archive_snapshot(store,state,pending)
                 invalidate_dependents(state,{task['id']})
                 task['revision']+=1
-                task['self_check']=f"tmp_plan/checks/{task['id']}/R{task['revision']:03d}/单元自检.shell"
+                task['self_check']=f"tmp_plan/checks/{task['id']}/R{task['revision']:03d}/self-check.sh"
                 task['check_source_hashes']={}
                 pending.append((project_path(store.project,task['self_check']),shell_bytes(task)))
                 task['status']='planned'

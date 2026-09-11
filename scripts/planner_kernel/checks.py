@@ -27,7 +27,7 @@ def runner_fingerprint(skill_root):
     root = Path(skill_root)
     files = sorted((root / 'scripts/planner_kernel').glob('*.py'))
     if (root/'scripts/planner.py').is_file(): files.append(root/'scripts/planner.py')
-    files += [root/name for name in ('pyproject.toml','uv.lock','.python-version','scripts/python.shell','scripts/planner.shell') if (root/name).is_file()]
+    files += [root/name for name in ('pyproject.toml','uv.lock','.python-version','scripts/python.sh','scripts/planner.sh') if (root/name).is_file()]
     require(bool(files), 'Missing runner source', 'BLOCKED')
     return fingerprint({str(p.relative_to(root)): digest(p.read_bytes()) for p in files})
 

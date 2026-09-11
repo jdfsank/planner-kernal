@@ -1,50 +1,50 @@
-# 规划者、执行者与验收者
+# Planners, executors, and accepters
 
-## 创建任务之前
+## Before creating a task
 
-读取目标项目的实际实现、约束、已有测试和用户需求。目标由 JSON `goal` 定义，外部文档是来源引用，不是额外执行授权。一个 Stage 描述可观察能力，Task 是独立实施和验收边界；内部连续编辑保留为 Steps。
+Read the target project's actual implementation, constraints, existing tests, and user requirements. The JSON `goal` defines the objective; external documents are source references, not additional execution authorization. A Stage describes an observable capability, while a Task is an independent implementation and acceptance boundary; keep continuous internal edits as Steps.
 
-一个 Task 可以有多个内部模块，但只拥有一个独立版本化的公共 Output 契约。把相关 API 方法放在一个逻辑契约对象中，不为每个方法制造任务。不同公共产物需要独立修订、消费者和验收时再拆分。
+A Task may contain multiple internal modules but owns one independently versioned public Output contract. Put related API methods in one logical contract object instead of creating a task for each method. Split different public artifacts only when they need independent revisions, consumers, and acceptance.
 
-每个 Step 的四个字段都应具体：
+Each Step should make all four fields concrete:
 
 ```json
 {
-  "action": "在 slug 中先拒绝非字符串或仅空白输入，再执行 lower/split/join；不改变现有调用签名",
+  "action": "Reject non-string or whitespace-only input in slug before applying lower/split/join; preserve the existing call signature",
   "path": "subject.py",
-  "expected": "Hello   WORLD 转为 hello-world，空输入抛出 ValueError",
-  "verification": "运行 CHECK-NORMAL 与 CHECK-BOUNDARY，核对真实返回值及异常"
+  "expected": "Hello   WORLD becomes hello-world; empty input raises ValueError",
+  "verification": "Run CHECK-NORMAL and CHECK-BOUNDARY and inspect the actual value and exception"
 }
 ```
 
-避免“完善模块”“确保正确”等指令。调查尚未完成时在 `unresolved` 中列出问题，并建立有明确问题、信息来源和结果格式的调查任务。调查任务也有机器可验证的最低交付契约；事实、设计和视觉判断单独验收。
+Avoid instructions such as “improve the module” or “make it correct.” When investigation is incomplete, list the questions in `unresolved` and create an investigation task with explicit questions, sources, and result formats. Investigation tasks also need a machine-verifiable minimum delivery contract; accept facts, design, and visual judgments separately.
 
-`context_refs`、`test_sources` 和 `tested_paths` 都是项目相对的实际文件，不是模糊目录或 URL。把间接导入的测试辅助代码、关键 fixture 也列入 `test_sources`，把会影响结果的配置加入 `context_refs`。计划说明中的外部 URL 放入 Goal 的 `sources`。
+`context_refs`, `test_sources`, and `tested_paths` must be actual project-relative files, not vague directories or URLs. Include indirectly imported test helpers and important fixtures in `test_sources`, and configurations that affect results in `context_refs`. Put external URLs mentioned by the plan into the Goal's `sources`.
 
-## 创建并保存
+## Create and save
 
-使用一个 `define_entity` 操作提交相互引用的 Goal、Stage、Task 和初始 Output。定义任务时自动生成版本绑定的 shell，但业务测试由规划者编写或复用项目现有测试，并在任务达到 ready 前验证其真实入口。
+Use one `define_entity` operation to submit the mutually referencing Goal, Stage, Task, and initial Output. Defining a task automatically generates its revision-bound shell script, but the planner writes or reuses the business tests and verifies their real entry point before the task reaches ready.
 
-任务以 `planned / unknown / pending` 开始，Stage 以 `planned` 开始。定义完成不等于用户批准实施。用户只要计划时，`archive_pending_plan` 保存快照并清空执行会话。开发计划和验证输出是开发记录，不是目标项目的运行时状态。
+Tasks start as `planned / unknown / pending`, and Stages start as `planned`. Definition does not mean the user approved implementation. When the user wants planning only, `archive_pending_plan` saves a snapshot and clears the execution session. Development plans and verification output are development records, not runtime state in the target project.
 
-## 执行者
+## Executor
 
-1. 显式启用后 `resume`；读取 `freshness_warnings`、下一步与准备候选。
-2. 用户要求实施后 `claim_session`；导出当前 Task，核对修订及必要输入。
-3. `set_ready` 确认门禁，`start_task` 进入 active；只编辑 owned 路径，不扩大接口和范围。
-4. 按 Step 实施。若需改变检查行为或接口，返回规划者修订，不削弱断言来换取 PASS。
-5. 使用任务 shell，登记结果；自检失败按诊断路径修复。成功后 `request_review`。
-6. 返回改动文件、真实检查结果、证据 ID、偏差及未完成项。不得自称已通过独立审查。
+1. After explicit enablement, run `resume`; read `freshness_warnings`, next steps, and preparation candidates.
+2. After the user requests implementation, run `claim_session`; export the current Task and verify its revision and required inputs.
+3. Use `set_ready` to confirm the gates and `start_task` to enter active; edit only owned paths and do not expand the interface or scope.
+4. Implement each Step. If check behavior or an interface must change, return for planner revision instead of weakening assertions to obtain PASS.
+5. Use the task shell script and register the result; repair self-check failures through the diagnostic path. On success, use `request_review`.
+6. Return changed files, real check results, evidence IDs, deviations, and incomplete items. Do not claim an independent review was completed.
 
-同一对话暂停用 `pause` 保存快照并释放会话。崩溃后新对话不能仅凭时间抢占；用新的会话 ID、旧会话 ID 和 `old_stopped: true` 明确接管。`old_stopped` 是操作者基于事实作出的声明，内核无法跨宿主证明旧代理已经停止。
+Pause a conversation with `pause` to save a snapshot and release the session. After a crash, a new conversation cannot take over based only on elapsed time; use a new session ID, the old session ID, and `old_stopped: true` to make the takeover explicit. `old_stopped` is an operator's factual declaration; the kernel cannot prove across hosts that the old agent has stopped.
 
-## 验收者与纠错
+## Accepter and correction
 
-- Task：检查原目标、diff、模块测试、证据是否新鲜；`record_acceptance` 绑定当前任务修订。
-- Stage：所有成员通过后，真实执行 module_checks 和 integration_checks；记录 review 证据，再 `stage_review`，最后记录 Stage acceptance。
-- Goal：回到 success_criteria 进行验收；不能把自检报告当作体验、研究事实或视觉证据。
-- 实现缺陷回 Task；公共契约不兼容回 Output 提供者；组合失败回 Stage；目的和范围变化回 Goal。
+- Task: inspect the original objective, diff, module tests, and evidence freshness; bind `record_acceptance` to the current task revision.
+- Stage: after all members pass, really execute module_checks and integration_checks; record review evidence, then use `stage_review`, and finally record Stage acceptance.
+- Goal: return to success_criteria for acceptance; a self-check report cannot stand in for experience, research facts, or visual evidence.
+- Return implementation defects to the Task, incompatible public contracts to the Output provider, composition failures to the Stage, and changed purpose or scope to the Goal.
 
-`revise_entity` 与 `revise_contract` 先归档旧数据，再创建修订并传播失效。旧验收保持不变。重新绑定未验收任务的输入会创建新 Task revision；已经验收的任务先显式修订。兼容产物修订必须保持语义指纹。
+`revise_entity` and `revise_contract` archive old data first, then create the revision and propagate invalidation. Old acceptances remain unchanged. Rebinding inputs for an unaccepted task creates a new Task revision; explicitly revise an accepted task first. Compatible artifact revisions must preserve the semantic fingerprint.
 
-完成或取消的计划不原地复活。用户提出后续工作时显式 `new_plan`，保留旧档案和证据索引，生成新 plan_id。旧计划证据不能证明新计划。
+Do not revive a completed or cancelled plan in place. When the user requests follow-up work, explicitly use `new_plan`; preserve the old archive and evidence index and create a new plan_id. Evidence from the old plan cannot prove the new plan.

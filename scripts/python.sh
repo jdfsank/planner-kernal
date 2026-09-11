@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if ! command -v uv >/dev/null 2>&1; then
-  printf '%s\n' '{"status":"BLOCKED","exit_code":2,"error":"uv is required; install uv then run scripts/setup.shell"}'
+  printf '%s\n' '{"status":"BLOCKED","exit_code":2,"error":"uv is required; install uv then run scripts/setup.sh"}'
   exit 2
 fi
 # Never select an unrelated active or caller-configured project environment.

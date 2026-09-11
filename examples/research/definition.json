@@ -158,7 +158,7 @@
             "Result and report"
           ],
           "unresolved": [],
-          "self_check": "tmp_plan/checks/TASK-001/R001/单元自检.shell",
+          "self_check": "tmp_plan/checks/TASK-001/R001/self-check.sh",
           "status": "planned",
           "input_validity": "unknown",
           "adaptation_status": "pending"

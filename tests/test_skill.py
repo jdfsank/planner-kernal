@@ -79,7 +79,7 @@ class SkillTests(unittest.TestCase):
                 shutil.copyfile(ROOT/name,root/name)
             env={**os.environ,'VIRTUAL_ENV':'/nonexistent/foreign-env',
                  'UV_PROJECT_ENVIRONMENT':'/nonexistent/foreign-env'}
-            p=subprocess.run(['bash',str(root/'scripts/python.shell'),'-c',
+            p=subprocess.run(['bash',str(root/'scripts/python.sh'),'-c',
                               'import sys,json;print(json.dumps([sys.version_info[:3],sys.prefix]))'],
                              cwd='/',env=env,capture_output=True,text=True)
             self.assertEqual(p.returncode,0,p.stdout+p.stderr)
@@ -88,12 +88,12 @@ class SkillTests(unittest.TestCase):
             self.assertEqual(prefix,str(root/'.venv'))
             self.assertFalse((root/'tmp_plan').exists())
             env['PATH']='/usr/bin:/bin'
-            p=subprocess.run(['/bin/bash',str(root/'scripts/python.shell'),'-V'],
+            p=subprocess.run(['/bin/bash',str(root/'scripts/python.sh'),'-V'],
                              env=env,capture_output=True,text=True)
             self.assertEqual(p.returncode,2,p.stdout+p.stderr)
             self.assertEqual(json.loads(p.stdout)['status'],'BLOCKED')
             (root/'pyproject.toml').write_text((root/'pyproject.toml').read_text().replace('dependencies = []','dependencies = ["missing-planner-test-package==0.0.0"]'))
-            p=subprocess.run(['bash',str(root/'scripts/python.shell'),'-c','print("WRONGLY_EXECUTED")'],
+            p=subprocess.run(['bash',str(root/'scripts/python.sh'),'-c','print("WRONGLY_EXECUTED")'],
                              capture_output=True,text=True)
             self.assertNotEqual(p.returncode,0)
             self.assertNotIn('WRONGLY_EXECUTED',p.stdout)

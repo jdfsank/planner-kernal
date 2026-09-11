@@ -69,7 +69,7 @@ class RegressionTests(unittest.TestCase):
     def test_revision_archives_previous_task(self):
         with tempfile.TemporaryDirectory() as d:
             w=Workflow(d);old=w.engine.store.load_state();t=copy.deepcopy(w.task)
-            t.update(revision=2,self_check='tmp_plan/checks/TASK-001/R002/单元自检.shell',objective='A revised objective')
+            t.update(revision=2,self_check='tmp_plan/checks/TASK-001/R002/self-check.sh',objective='A revised objective')
             w.do('revise_entity',{'entities':[{'type':'task','value':t}]})
             state=w.engine.store.load_state()
             records=[w.engine.store.read_record(ref) for ref in state['archive_index'].values()]

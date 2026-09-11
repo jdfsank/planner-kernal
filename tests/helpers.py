@@ -38,7 +38,7 @@ def task(project, task_id='TASK-001', module='MODULE-001'):
                     expected='value equals 42', timeout_seconds=3, required=True, adapter='json')],
                 tested_paths=['subject.py'], acceptance_criteria=['Returns 42'], failure_routes=['Repair subject'],
                 handoff=['Result and report'], unresolved=[],
-                self_check=f'tmp_plan/checks/{task_id}/R001/单元自检.shell', status='planned',
+                self_check=f'tmp_plan/checks/{task_id}/R001/self-check.sh', status='planned',
                 input_validity='unknown', adaptation_status='pending')
 
 

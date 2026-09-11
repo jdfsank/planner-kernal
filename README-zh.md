@@ -54,17 +54,17 @@ planner-kernal 适合需要长期推进、跨对话恢复或多人/多代理协�
 
 ```bash
 cd /absolute/path/to/planner-kernal
-bash scripts/setup.shell
+bash scripts/setup.sh
 ```
 
-`setup.shell` 会使用锁定配置创建项目自己的 `.venv`，不会修改目标项目的 Python 环境。日常命令应通过项目脚本运行，以确保使用锁定的 Python 和依赖：
+`setup.sh` 会使用锁定配置创建项目自己的 `.venv`，不会修改目标项目的 Python 环境。日常命令应通过项目脚本运行，以确保使用锁定的 Python 和依赖：
 
 ```bash
-bash scripts/planner.shell --help
-bash scripts/python.shell -c 'import sys; print(sys.version)'
+bash scripts/planner.sh --help
+bash scripts/python.sh -c 'import sys; print(sys.version)'
 ```
 
-如果机器没有 `uv`，脚本会输出 `BLOCKED` 并以退出码 `2` 结束。网络或本地缓存不可用时，先检查 `uv.lock` 是否与 `pyproject.toml` 一致，再重新运行 `setup.shell`。
+如果机器没有 `uv`，脚本会输出 `BLOCKED` 并以退出码 `2` 结束。网络或本地缓存不可用时，先检查 `uv.lock` 是否与 `pyproject.toml` 一致，再重新运行 `setup.sh`。
 
 ## 快速开始
 
@@ -76,7 +76,7 @@ bash scripts/python.shell -c 'import sys; print(sys.version)'
 export PLANNER_KERNEL_HOME="/absolute/path/to/planner-kernal"
 export PROJECT_ROOT="/absolute/path/to/your-project"
 
-bash "$PLANNER_KERNEL_HOME/scripts/setup.shell"
+bash "$PLANNER_KERNEL_HOME/scripts/setup.sh"
 ```
 
 如果只想体验示例，可以创建一个临时项目并复制软件样例：
@@ -91,7 +91,7 @@ cp "$PLANNER_KERNEL_HOME/examples/software/probe.py" "$PROJECT_ROOT/"
 ### 2. 显式初始化
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   init --project "$PROJECT_ROOT" --explicit
 ```
 
@@ -100,7 +100,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 默认情况下，如果目标目录位于 Git 工作树中，初始化会把对应的 `tmp_plan/` 规则写入该仓库的 `.git/info/exclude`，不会修改共享 `.gitignore`。不希望写入 Git exclude 时使用：
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   init --project "$PROJECT_ROOT" --explicit --no-git-exclude
 ```
 
@@ -109,7 +109,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 样例 `definition.json` 是一个 `define_entity` 操作，包含 Goal、Stage 和 Task。执行：
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   apply --project "$PROJECT_ROOT" \
   --input "$PROJECT_ROOT/definition.json"
 ```
@@ -117,10 +117,10 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 然后查看恢复摘要和结构状态：
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   resume --project "$PROJECT_ROOT"
 
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   validate --project "$PROJECT_ROOT"
 ```
 
@@ -144,7 +144,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 保存为 `set-ready.json` 后执行：
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   apply --project "$PROJECT_ROOT" --input set-ready.json
 ```
 
@@ -181,7 +181,7 @@ complete
 任务进入 `active` 后，可以导出当前任务的执行包：
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   export-task --project "$PROJECT_ROOT" \
   --task TASK-001 \
   --output tmp_plan/packets/TASK-001.json
@@ -192,7 +192,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 任务的自检结果必须写入 `tmp_plan/` 下一个全新的结果路径：
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   run-check --project "$PROJECT_ROOT" \
   --task TASK-001 \
   --task-revision 1 \
@@ -308,15 +308,15 @@ Task 状态包括 `planned`、`ready`、`active`、`ready_for_review`、`passed`
 
 ```bash
 # 查询全部 Task
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   query --project "$PROJECT_ROOT" --type tasks
 
 # 查询指定 Task
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   query --project "$PROJECT_ROOT" --type tasks --id TASK-001
 
 # 查询某个 Task revision 的 PASS 证据
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   query --project "$PROJECT_ROOT" \
   --type evidence --subject TASK-001 --revision 1 --status PASS
 ```
@@ -325,16 +325,16 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 
 ```bash
 # 应用一个操作文件
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   apply --project "$PROJECT_ROOT" --input operation.json
 
 # 可选地再次核对命令行 revision 与 JSON body 一致
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   apply --project "$PROJECT_ROOT" \
   --input operation.json --expected-revision 4
 
 # 专门归档待执行计划
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   archive --project "$PROJECT_ROOT" --input archive.json
 ```
 
@@ -343,7 +343,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 每个可独立执行的 Task revision 都有一个版本绑定的 Bash 入口：
 
 ```text
-tmp_plan/checks/TASK-001/R001/单元自检.shell
+tmp_plan/checks/TASK-001/R001/self-check.sh
 ```
 
 自检定义包含：
@@ -396,9 +396,9 @@ planner-kernal/
 ├── SKILL.md                         # Codex skill 定义与使用边界
 ├── agents/openai.yaml               # UI 元数据与显式启用策略
 ├── scripts/
-│   ├── planner.shell                # CLI 启动包装器
-│   ├── python.shell                 # 锁定 Python/uv 运行器
-│   ├── setup.shell                  # 创建本地开发环境
+│   ├── planner.sh                # CLI 启动包装器
+│   ├── python.sh                 # 锁定 Python/uv 运行器
+│   ├── setup.sh                  # 创建本地开发环境
 │   ├── planner.py                   # Python CLI 入口
 │   ├── dev_check.py                 # 开发阶段任务检查入口
 │   └── planner_kernel/              # 核心实现
@@ -418,25 +418,25 @@ planner-kernal/
 安装开发环境：
 
 ```bash
-bash scripts/setup.shell
+bash scripts/setup.sh
 ```
 
 运行完整测试套件：
 
 ```bash
-bash scripts/python.shell -m unittest discover -s tests -t .
+bash scripts/python.sh -m unittest discover -s tests -t .
 ```
 
 运行某个测试模块：
 
 ```bash
-bash scripts/python.shell -m unittest tests.test_kernel
+bash scripts/python.sh -m unittest tests.test_kernel
 ```
 
 运行项目自身的任务开发检查：
 
 ```bash
-bash checks/TASK-KERNEL-001/R002/单元自检.shell \
+bash checks/TASK-KERNEL-001/R002/self-check.sh \
   --result /tmp/planner-kernal-kernel-check.json
 ```
 
@@ -453,7 +453,7 @@ bash checks/TASK-KERNEL-001/R002/单元自检.shell \
 目标项目还没有运行时状态。先执行：
 
 ```bash
-bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
+bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   init --project "$PROJECT_ROOT" --explicit
 ```
 
@@ -474,7 +474,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.shell" \
 确认已安装 `uv`，并执行：
 
 ```bash
-bash scripts/setup.shell
+bash scripts/setup.sh
 ```
 
 锁定运行器使用离线模式；如果本地缓存不完整，按 `uv` 的环境提示补齐缓存后再重试。
