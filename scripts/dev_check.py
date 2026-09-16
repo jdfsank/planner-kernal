@@ -161,7 +161,8 @@ def main():
             runtime_task={'id':task_plan['id'],'revision':task_plan['revision'],
                           'self_check':task_plan['self_check'],'context_refs':[],
                           'tested_paths':task_plan['tested_paths'],'inputs':[],
-                          'modules':[{'id':item['module_id']} for item in definitions],'checks':checks}
+                          'check_groups':[{'module_id':item['module_id']} for item in definitions],
+                          'checks':checks}
             previous=os.environ.get('PYTHONPATH')
             os.environ['PYTHONPATH']=str(workspace/'scripts')+os.pathsep+str(workspace)
             try:

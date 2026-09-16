@@ -137,10 +137,10 @@ def summarize_results(task, results):
     by_id = {r['check_id']: r for r in results}
     require(set(by_id) == {c['id'] for c in task['checks']}, 'Mismatched check IDs', 'ERROR')
     modules = []
-    for module in task['modules']:
-        required = [c for c in task['checks'] if c['required'] and module['id'] in c['module_ids']]
+    for module in task['check_groups']:
+        required = [c for c in task['checks'] if c['required'] and module['module_id'] in c['module_ids']]
         status = max((by_id[c['id']]['status'] for c in required), key=PRIORITY.get) if required else 'BLOCKED'
-        modules.append({'module_id': module['id'], 'status': status,
+        modules.append({'module_id': module['module_id'], 'status': status,
                         'check_ids': [c['id'] for c in required]})
     overall = max((m['status'] for m in modules), key=PRIORITY.get) if modules else 'BLOCKED'
     return overall, modules
@@ -172,7 +172,7 @@ def run_checks(task, project, result_path, skill_root):
     work_dir = runtime_path(project, 'tmp_plan/work/' + run_id)
     raw_dir.mkdir(parents=True)
     work_dir.mkdir(parents=True)
-    result = {'schema_version': 1, 'kind': 'self_check', 'task_id': task['id'],
+    result = {'schema_version': 2, 'kind': 'self_check', 'task_id': task['id'],
               'task_revision': task['revision'], 'started_at': now(), 'finished_at': '',
               'binding': {}, 'status': 'ERROR', 'exit_code': 3, 'modules': [],
               'checks': [], 'attachments': [], 'error': ''}

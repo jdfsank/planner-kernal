@@ -1,7 +1,388 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://planner-kernal.local/schema/v1",
+  "$id": "https://planner-kernal.local/schema/v2",
   "$defs": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "verification": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "parameters",
+        "verification"
+      ],
+      "additionalProperties": false
+    },
+    "contract": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "carrier": {
+          "enum": [
+            "file",
+            "dataframe",
+            "function",
+            "http",
+            "event",
+            "other"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schema": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "semantic_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          },
+          "minItems": 1
+        },
+        "error_behavior": {
+          "type": "string",
+          "minLength": 1
+        },
+        "side_effects": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fingerprint": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "name",
+        "carrier",
+        "format",
+        "schema",
+        "semantic_rules",
+        "error_behavior",
+        "side_effects",
+        "fingerprint"
+      ],
+      "additionalProperties": false
+    },
+    "port": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "contract_id",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "architecture_review": {
+      "type": "object",
+      "properties": {
+        "reviewer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_mode": {
+          "enum": [
+            "self_review",
+            "independent"
+          ]
+        },
+        "findings": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "reviewer",
+        "review_mode",
+        "findings"
+      ],
+      "additionalProperties": false
+    },
+    "architecture": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "goal_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "module_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+          },
+          "minItems": 1
+        },
+        "root_module_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+          },
+          "minItems": 1
+        },
+        "unresolved": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "reviewed",
+            "baselined"
+          ]
+        },
+        "review": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/architecture_review"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "goal_id",
+        "scope",
+        "evidence_refs",
+        "module_ids",
+        "root_module_ids",
+        "unresolved",
+        "status",
+        "review"
+      ],
+      "additionalProperties": false
+    },
+    "product_module": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "architecture_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "existing",
+            "planned",
+            "external"
+          ]
+        },
+        "responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exclusions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "implementation_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "input_ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/port"
+          },
+          "minItems": 0
+        },
+        "output_ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/port"
+          },
+          "minItems": 0
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "decomposition_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replaceability_statement": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "architecture_id",
+        "parent_id",
+        "name",
+        "kind",
+        "responsibility",
+        "exclusions",
+        "implementation_refs",
+        "input_ports",
+        "output_ports",
+        "dependencies",
+        "decomposition_reason",
+        "replaceability_statement"
+      ],
+      "additionalProperties": false
+    },
+    "connection": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "architecture_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "from_module_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "from_port_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "to_module_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "to_port_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "contract_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "architecture_id",
+        "from_module_id",
+        "from_port_id",
+        "to_module_id",
+        "to_port_id",
+        "contract_id"
+      ],
+      "additionalProperties": false
+    },
     "goal": {
       "type": "object",
       "properties": {
@@ -188,10 +569,10 @@
       ],
       "additionalProperties": false
     },
-    "module": {
+    "check_group": {
       "type": "object",
       "properties": {
-        "id": {
+        "module_id": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
         },
@@ -215,7 +596,7 @@
         }
       },
       "required": [
-        "id",
+        "module_id",
         "purpose",
         "boundary_required",
         "boundary_reason",
@@ -312,6 +693,22 @@
         "stage_id": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "architecture_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "architecture_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "module_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+          },
+          "minItems": 1
         },
         "objective": {
           "type": "string",
@@ -435,10 +832,10 @@
           },
           "minItems": 0
         },
-        "modules": {
+        "check_groups": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/module"
+            "$ref": "#/$defs/check_group"
           },
           "minItems": 1
         },
@@ -535,6 +932,9 @@
         "id",
         "revision",
         "stage_id",
+        "architecture_id",
+        "architecture_revision",
+        "module_ids",
         "objective",
         "exclusions",
         "context_refs",
@@ -546,7 +946,7 @@
         "ownership",
         "dependencies",
         "inputs",
-        "modules",
+        "check_groups",
         "checks",
         "tested_paths",
         "acceptance_criteria",
@@ -574,6 +974,18 @@
         "task_id": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "module_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "contract_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+          },
+          "minItems": 1
         },
         "interface_key": {
           "type": "string",
@@ -607,6 +1019,8 @@
         "id",
         "revision",
         "task_id",
+        "module_id",
+        "contract_ids",
         "interface_key",
         "contract",
         "paths",
@@ -841,7 +1255,7 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": 1
+          "const": 2
         },
         "project_id": {
           "type": "string",
@@ -883,6 +1297,24 @@
                 "$ref": "#/$defs/goal"
               }
             },
+            "architectures": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/architecture"
+              }
+            },
+            "contracts": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/contract"
+              }
+            },
+            "connections": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/connection"
+              }
+            },
             "stages": {
               "type": "object",
               "additionalProperties": {
@@ -918,16 +1350,26 @@
               "additionalProperties": {
                 "$ref": "#/$defs/acceptance"
               }
+            },
+            "modules": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/product_module"
+              }
             }
           },
           "required": [
             "goals",
+            "architectures",
+            "contracts",
+            "connections",
             "stages",
             "tasks",
             "outputs",
             "decisions",
             "blockers",
-            "acceptances"
+            "acceptances",
+            "modules"
           ],
           "additionalProperties": false
         },
@@ -1031,7 +1473,7 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": 1
+          "const": 2
         },
         "operation_id": {
           "type": "string",
@@ -1191,7 +1633,7 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": 1
+          "const": 2
         },
         "kind": {
           "const": "self_check"
@@ -1306,7 +1748,7 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": 1
+          "const": 2
         },
         "kind": {
           "const": "review"

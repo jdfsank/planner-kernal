@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "operation_id": "OP-001",
   "expected_revision": 0,
   "session_id": "",
@@ -25,6 +25,60 @@
           "replan_conditions": [
             "Expected result changes"
           ]
+        }
+      },
+      {
+        "type": "contract",
+        "value": {
+          "id": "CONTRACT-001",
+          "revision": 1,
+          "name": "Slug function",
+          "carrier": "function",
+          "format": "Python call",
+          "schema": {"input": {"text": "string"}, "output": {"slug": "string"}},
+          "semantic_rules": [{
+            "id": "RULE-001",
+            "description": "Nonempty text is normalized to lowercase hyphen-separated words",
+            "parameters": {},
+            "verification": "Run normal and boundary probes"
+          }],
+          "error_behavior": "Empty or non-string input raises ValueError",
+          "side_effects": "None",
+          "fingerprint": "sha256:93a8e291b383a63dbc823dde84f288f09e873e00063bfdfabf1388558efe49d7"
+        }
+      },
+      {
+        "type": "module",
+        "value": {
+          "id": "MODULE-001",
+          "revision": 1,
+          "architecture_id": "ARCH-001",
+          "parent_id": "",
+          "name": "Slug normalizer",
+          "kind": "existing",
+          "responsibility": "Normalize a title through the public slug function",
+          "exclusions": [],
+          "implementation_refs": ["subject.py", "probe.py"],
+          "input_ports": [],
+          "output_ports": [{"id": "PORT-SLUG", "name": "slug", "contract_id": "CONTRACT-001", "description": "Normalized slug function"}],
+          "dependencies": [],
+          "decomposition_reason": "This is the smallest independently replaceable capability",
+          "replaceability_statement": "Any implementation satisfying CONTRACT-001 can replace this module"
+        }
+      },
+      {
+        "type": "architecture",
+        "value": {
+          "id": "ARCH-001",
+          "revision": 1,
+          "goal_id": "GOAL-001",
+          "scope": ["Slug normalization"],
+          "evidence_refs": ["subject.py", "probe.py"],
+          "module_ids": ["MODULE-001"],
+          "root_module_ids": ["MODULE-001"],
+          "unresolved": [],
+          "status": "baselined",
+          "review": {"reviewer": "example-author", "review_mode": "self_review", "findings": "The single module and its contract cover the complete example scope"}
         }
       },
       {
@@ -57,6 +111,9 @@
           "id": "TASK-001",
           "revision": 1,
           "stage_id": "STAGE-001",
+          "architecture_id": "ARCH-001",
+          "architecture_revision": 1,
+          "module_ids": ["MODULE-001"],
           "objective": "Normalize a nonempty title to a slug",
           "exclusions": [],
           "context_refs": [],
@@ -71,7 +128,7 @@
               "action": "Inspect and verify the supplied implementation",
               "path": "subject.py",
               "expected": "Hello WORLD becomes hello-world",
-              "verification": "Run the task shell and inspect both cases"
+              "verification": "Run the task self-check .sh script and inspect both cases"
             }
           ],
           "ownership": {
@@ -85,9 +142,9 @@
           },
           "dependencies": [],
           "inputs": [],
-          "modules": [
+          "check_groups": [
             {
-              "id": "MODULE-001",
+              "module_id": "MODULE-001",
               "purpose": "Result",
               "boundary_required": true,
               "boundary_reason": "",

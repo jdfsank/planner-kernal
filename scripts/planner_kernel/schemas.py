@@ -25,6 +25,38 @@ def build_schema():
     enum = lambda *values: {"enum": list(values)}
     base = {"id": ident, "revision": revision}
     defs = {}
+    defs['rule'] = obj({'id': ident, 'description': text, 'parameters': mapping,
+                        'verification': text})
+    defs['contract'] = obj({**base, 'name': text,
+                            'carrier': enum('file', 'dataframe', 'function', 'http', 'event', 'other'),
+                            'format': text, 'schema': mapping,
+                            'semantic_rules': array(ref('rule'), 1),
+                            'error_behavior': text, 'side_effects': text,
+                            'fingerprint': text})
+    defs['port'] = obj({'id': ident, 'name': text, 'contract_id': ident,
+                        'description': text})
+    defs['architecture_review'] = obj({'reviewer': text,
+                                       'review_mode': enum('self_review', 'independent'),
+                                       'findings': text})
+    defs['architecture'] = obj({**base, 'goal_id': ident, 'scope': array(text, 1),
+                                'evidence_refs': array(text, 1), 'module_ids': array(ident, 1),
+                                'root_module_ids': array(ident, 1), 'unresolved': strings,
+                                'status': enum('draft', 'reviewed', 'baselined'),
+                                'review': {'oneOf': [{'type': 'null'}, ref('architecture_review')]}})
+    defs['product_module'] = obj({**base, 'architecture_id': ident,
+                                  'parent_id': string, 'name': text,
+                                  'kind': enum('existing', 'planned', 'external'),
+                                  'responsibility': text, 'exclusions': strings,
+                                  'implementation_refs': strings,
+                                  'input_ports': array(ref('port')),
+                                  'output_ports': array(ref('port')),
+                                  'dependencies': strings,
+                                  'decomposition_reason': text,
+                                  'replaceability_statement': text})
+    defs['connection'] = obj({**base, 'architecture_id': ident,
+                              'from_module_id': ident, 'from_port_id': ident,
+                              'to_module_id': ident, 'to_port_id': ident,
+                              'contract_id': ident})
     defs['goal'] = obj({**base, 'purpose': text, 'in_scope': array(text, 1),
                         'out_of_scope': strings, 'success_criteria': array(text, 1),
                         'constraints': strings, 'sources': strings, 'replan_conditions': strings})
@@ -35,21 +67,24 @@ def build_schema():
                          'status': enum('planned', 'ready', 'active', 'ready_for_integration',
                                         'ready_for_stage_review', 'passed', 'invalidated', 'superseded')})
     defs['input'] = obj({'output_id': ident, 'revision': revision, 'fingerprint': text})
-    defs['module'] = obj({'id': ident, 'purpose': text, 'boundary_required': {'type': 'boolean'},
-                          'boundary_reason': string, 'check_ids': array(ident, 1)})
+    defs['check_group'] = obj({'module_id': ident, 'purpose': text,
+                               'boundary_required': {'type': 'boolean'},
+                               'boundary_reason': string, 'check_ids': array(ident, 1)})
     defs['check'] = obj({'id': ident, 'module_ids': array(ident, 1),
                          'case': enum('normal', 'boundary', 'integration'), 'argv': array(text, 1),
                          'cwd': text, 'test_sources': array(text, 1), 'expected': text,
                          'timeout_seconds': {'type': 'number', 'minimum': 0.05},
                          'required': {'type': 'boolean'}, 'adapter': enum('unittest', 'junit', 'json')})
-    defs['task'] = obj({**base, 'stage_id': ident, 'objective': text, 'exclusions': strings,
+    defs['task'] = obj({**base, 'stage_id': ident, 'architecture_id': ident,
+                        'architecture_revision': revision, 'module_ids': array(ident, 1),
+                        'objective': text, 'exclusions': strings,
                         'context_refs': strings, 'current_state': text, 'gap': text,
                         'implementation_strategy': text, 'interface_contracts': array(text, 1),
                         'execution_steps': array(obj({'action': text, 'path': text,
                                                      'expected': text, 'verification': text}), 1),
                         'ownership': obj({'owned': array(text, 1), 'read_only': strings, 'forbidden': strings}),
                         'dependencies': strings, 'inputs': array(ref('input')),
-                        'modules': array(ref('module'), 1), 'checks': array(ref('check'), 1),
+                        'check_groups': array(ref('check_group'), 1), 'checks': array(ref('check'), 1),
                         'tested_paths': array(text, 1), 'acceptance_criteria': array(text, 1),
                         'failure_routes': array(text, 1), 'handoff': array(text, 1),
                         'unresolved': strings, 'self_check': text,
@@ -59,7 +94,8 @@ def build_schema():
                         'adaptation_status': enum('pending', 'compatible', 'adapted',
                                                   'replan_required', 'blocked', 'obsolete')})
     defs['task']['properties']['check_source_hashes']={'type':'object','additionalProperties':text}
-    defs['output'] = obj({**base, 'task_id': ident, 'interface_key': text,
+    defs['output'] = obj({**base, 'task_id': ident, 'module_id': ident,
+                          'contract_ids': array(ident, 1), 'interface_key': text,
                           'contract': mapping, 'paths': array(text, 1), 'fingerprint': text,
                           'compatibility': enum('new', 'compatible', 'breaking')})
     defs['decision'] = obj({**base, 'text': text, 'source': text})
@@ -78,8 +114,10 @@ def build_schema():
                                 'subject_revision':revision,'status':enum('PASS','FAIL','BLOCKED','ERROR'),
                                 'plan_id':text,'registered_revision':revision})
     maps = {name + 's': {'type': 'object', 'additionalProperties': ref(name)}
-            for name in ('goal', 'stage', 'task', 'output', 'decision', 'blocker', 'acceptance')}
-    defs['state'] = obj({'schema_version': {'const': 1}, 'project_id': text, 'plan_id': text,
+            for name in ('goal', 'architecture', 'contract', 'connection', 'stage', 'task',
+                         'output', 'decision', 'blocker', 'acceptance')}
+    maps['modules'] = {'type': 'object', 'additionalProperties': ref('product_module')}
+    defs['state'] = obj({'schema_version': {'const': 2}, 'project_id': text, 'plan_id': text,
                          'retired_ids':array(ident),
                          'revision': {'type': 'integer', 'minimum': 0},
                          'status': enum('draft', 'awaiting_execution', 'executing', 'paused',
@@ -90,7 +128,7 @@ def build_schema():
                          'archive_index': {'type': 'object', 'additionalProperties': ref('record_ref')},
                          'evidence_index': {'type': 'object', 'additionalProperties': ref('evidence_ref')},
                          'receipts': {'type': 'object', 'additionalProperties': obj({'request_hash': text, 'response': mapping})}})
-    defs['operation'] = obj({'schema_version': {'const': 1}, 'operation_id': ident,
+    defs['operation'] = obj({'schema_version': {'const': 2}, 'operation_id': ident,
                              'expected_revision': {'type': 'integer', 'minimum': 0},
                              'session_id': string,
                              'kind': enum('define_entity', 'revise_entity', 'archive_pending_plan',
@@ -105,13 +143,13 @@ def build_schema():
                                 'status':enum('PASS','FAIL','BLOCKED','ERROR'),
                                 'returncode':{'oneOf':[{'type':'integer'},{'type':'null'}]},
                                 'tests':array(ref('test_case')),'error':string,'report_path':text,'log_path':text})
-    defs['self_check_result'] = obj({'schema_version':{'const':1},'kind':{'const':'self_check'},
+    defs['self_check_result'] = obj({'schema_version':{'const':2},'kind':{'const':'self_check'},
                                      'task_id':ident,'task_revision':revision,'started_at':text,'finished_at':text,
                                      'binding':mapping,'status':enum('PASS','FAIL','BLOCKED','ERROR'),
                                      'exit_code':{'enum':[0,1,2,3]},
                                      'modules':array(obj({'module_id':ident,'status':enum('PASS','FAIL','BLOCKED','ERROR'),'check_ids':strings})),
                                      'checks':array(ref('check_result')),'attachments':array(ref('record_ref')),'error':string})
-    defs['review_evidence'] = obj({'schema_version':{'const':1},'kind':{'const':'review'},'plan_id':text,
+    defs['review_evidence'] = obj({'schema_version':{'const':2},'kind':{'const':'review'},'plan_id':text,
                                    'subject_type':enum('task','stage','goal'),'subject_id':ident,'subject_revision':revision,
                                    'subject_revisions':{'type':'object','additionalProperties':revision},
                                    'status':enum('PASS','FAIL','BLOCKED'),'criteria':array(text,1),
@@ -120,5 +158,5 @@ def build_schema():
                                    'bindings':{'type':'object','additionalProperties':text},
                                    'attachments':array(ref('record_ref')),'supersedes':string})
     return {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-            '$id': 'https://planner-kernal.local/schema/v1', '$defs': defs,
+            '$id': 'https://planner-kernal.local/schema/v2', '$defs': defs,
             '$ref': '#/$defs/state'}

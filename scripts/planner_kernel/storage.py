@@ -41,9 +41,10 @@ class Store:
                 # Never overwrite or reinterpret an unknown previous layout.
                 require(set(p.name for p in self.root.iterdir()) <= {'.lock'},
                         'Non-empty tmp_plan without state.json; manual recovery required', 'UNKNOWN_LAYOUT')
-                state = {'schema_version': 1, 'project_id': str(uuid.uuid4()), 'plan_id': str(uuid.uuid4()), 'revision': 0, 'retired_ids':[],
+                state = {'schema_version': 2, 'project_id': str(uuid.uuid4()), 'plan_id': str(uuid.uuid4()), 'revision': 0, 'retired_ids':[],
                          'status': 'draft', 'entities': {name: {} for name in
-                             ('goals','stages','tasks','outputs','decisions','blockers','acceptances')},
+                             ('goals','architectures','contracts','modules','connections','stages',
+                              'tasks','outputs','decisions','blockers','acceptances')},
                          'session': None, 'checkpoint': {'summary': '', 'next_steps': []},
                          'archive_index': {}, 'evidence_index': {}, 'receipts': {}}
                 validate_document(state)
@@ -76,6 +77,9 @@ class Store:
 
     def load_state(self, verify_records=True):
         state = read_json(runtime_path(self.project, 'tmp_plan/state.json'))
+        require(state.get('schema_version') == 2,
+                'Unsupported state schema version; preserve tmp_plan and use the matching Git version',
+                'VERSION')
         validate_document(state)
         if verify_records:
             for index in ('archive_index', 'evidence_index'):
@@ -162,4 +166,6 @@ def query_index(state):
             if dep in reverse: reverse[dep].append(key)
     return {'counts': {status: sum(t['status'] == status for t in tasks.values())
                        for status in ('planned','ready','active','ready_for_review','passed','failed','blocked','deferred','superseded')},
-            'dependents': reverse, 'next_task_ids': sorted(key for key,t in tasks.items() if t['status'] == 'ready')}
+            'dependents': reverse,
+            'next_task_ids': sorted(key for key,t in tasks.items() if t['status']=='ready'),
+            'review_task_ids': sorted(key for key,t in tasks.items() if t['status']=='ready_for_review')}

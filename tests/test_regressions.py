@@ -78,7 +78,9 @@ class RegressionTests(unittest.TestCase):
     def test_duplicate_live_interface_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             w=Workflow(d)
-            out=dict(id='OUT-001',revision=1,task_id='TASK-001',interface_key='value',contract={'value':42},paths=['subject.py'],fingerprint=fingerprint({'value':42}),compatibility='new')
+            out=dict(id='OUT-001',revision=1,task_id='TASK-001',module_id='MODULE-001',
+                     contract_ids=['CONTRACT-001'],interface_key='value',contract={'value':42},
+                     paths=['subject.py'],fingerprint=fingerprint({'value':42}),compatibility='new')
             other={**out,'id':'OUT-002'}
             with self.assertRaises(KernelError):
                 w.do('define_entity',{'entities':[{'type':'output','value':out},{'type':'output','value':other}]})

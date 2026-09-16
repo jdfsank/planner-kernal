@@ -70,3 +70,15 @@ class StorageTests(unittest.TestCase):
                 with self.assertRaises(KernelError): store.store_record([], path, {})
             with self.assertRaises(KernelError):
                 store.commit(operation('save_checkpoint'), lambda s,r: s.update(extra=True))
+
+    def test_v1_state_is_rejected_without_rewrite(self):
+        with tempfile.TemporaryDirectory() as d:
+            store=Store(d)
+            store.init(git_exclude=False)
+            path=Path(d,'tmp_plan/state.json')
+            original=path.read_text()
+            path.write_text(original.replace('"schema_version":2','"schema_version":1'))
+            with self.assertRaises(KernelError) as raised:
+                store.load_state()
+            self.assertEqual(raised.exception.code,'VERSION')
+            self.assertIn('"schema_version":1',path.read_text())

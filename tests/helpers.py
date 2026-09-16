@@ -17,6 +17,33 @@ def stage():
                 module_checks=['Module works'], integration_checks=['End-to-end works'], status='planned')
 
 
+def contract():
+    from planner_kernel.contracts import fingerprint
+    value=dict(id='CONTRACT-001',revision=1,name='Integer result',carrier='function',format='Python int',
+               schema={'type':'integer'},semantic_rules=[dict(id='RULE-001',description='Value equals 42',
+               parameters={'expected':42},verification='Run probe.py')],error_behavior='No error',
+               side_effects='None')
+    return {**value,'fingerprint':fingerprint(value)}
+
+
+def product_module():
+    return dict(id='MODULE-001',revision=1,architecture_id='ARCH-001',parent_id='',name='Result provider',
+                kind='existing',responsibility='Provide the integer result',exclusions=[],
+                implementation_refs=['subject.py'],input_ports=[],
+                output_ports=[dict(id='PORT-RESULT',name='result',contract_id='CONTRACT-001',
+                                   description='Public result value')],dependencies=[],
+                decomposition_reason='This is the smallest independently replaceable unit',
+                replaceability_statement='Any implementation satisfying CONTRACT-001 can replace it')
+
+
+def architecture():
+    return dict(id='ARCH-001',revision=1,goal_id='GOAL-001',scope=['Integer result capability'],
+                evidence_refs=['subject.py','probe.py'],module_ids=['MODULE-001'],
+                root_module_ids=['MODULE-001'],unresolved=[],status='baselined',
+                review=dict(reviewer='test',review_mode='self_review',
+                            findings='The module boundary and contract cover the goal'))
+
+
 def task(project, task_id='TASK-001', module='MODULE-001'):
     project = Path(project)
     (project / 'subject.py').write_text('value = 42\n')
@@ -26,12 +53,13 @@ def task(project, task_id='TASK-001', module='MODULE-001'):
         'ok = value == 42\n'
         'Path(sys.argv[1]).write_text(json.dumps({"tests":[{"id":"value","status":"PASS" if ok else "FAIL"}]}))\n'
         'sys.exit(0 if ok else 1)\n')
-    return dict(id=task_id, revision=1, stage_id='STAGE-001', objective='Return 42', exclusions=[],
+    return dict(id=task_id, revision=1, stage_id='STAGE-001', architecture_id='ARCH-001',
+                architecture_revision=1,module_ids=[module],objective='Return 42', exclusions=[],
                 context_refs=[], current_state='Return value missing', gap='Implement value',
                 implementation_strategy='Set the public constant to 42', interface_contracts=['value: int = 42'],
                 execution_steps=[dict(action='Set value', path='subject.py', expected='42', verification='probe')],
                 ownership=dict(owned=['subject.py'], read_only=['probe.py'], forbidden=[]),
-                dependencies=[], inputs=[], modules=[dict(id=module, purpose='Result', boundary_required=False,
+                dependencies=[], inputs=[], check_groups=[dict(module_id=module, purpose='Result', boundary_required=False,
                   boundary_reason='Single constant, no argument boundary', check_ids=['CHECK-001'])],
                 checks=[dict(id='CHECK-001', module_ids=[module], case='normal',
                     argv=['{python}', 'probe.py', '{report}'], cwd='.', test_sources=['probe.py'],
@@ -49,7 +77,7 @@ def create_shell(project, t):
 
 
 def operation(kind, data=None, revision=0, session='', operation_id='OP-001'):
-    return dict(schema_version=1, operation_id=operation_id, expected_revision=revision,
+    return dict(schema_version=2, operation_id=operation_id, expected_revision=revision,
                 session_id=session, kind=kind, data=data or {})
 
 
@@ -60,7 +88,9 @@ class Workflow:
         self.engine.store.init(git_exclude=False)
         self.task=task(project)
         self.do('define_entity',{'entities':[{'type':'goal','value':goal()},
-                   {'type':'stage','value':stage()},{'type':'task','value':self.task}]})
+                   {'type':'contract','value':contract()},{'type':'module','value':product_module()},
+                   {'type':'architecture','value':architecture()},{'type':'stage','value':stage()},
+                   {'type':'task','value':self.task}]})
 
     def do(self,kind,data=None):
         self.n+=1; state=self.engine.store.load_state()
@@ -85,7 +115,7 @@ class Workflow:
         state=self.engine.store.load_state();subject=state['entities'][kind+'s'][subject_id]
         criteria=subject[{'task':'acceptance_criteria','stage':'exit_criteria','goal':'success_criteria'}[kind]].copy()
         if kind=='stage': criteria+=subject['module_checks']+subject['integration_checks']
-        report=dict(schema_version=1,kind='review',plan_id=state['plan_id'],subject_type=kind,subject_id=subject_id,
+        report=dict(schema_version=2,kind='review',plan_id=state['plan_id'],subject_type=kind,subject_id=subject_id,
                     subject_revision=subject['revision'],subject_revisions=subject_revisions(state,kind,subject),
                     status='PASS',criteria=criteria,method='Execute example and inspect its output',
                     expected='42',actual='42',reviewer='test',review_mode='self_review',

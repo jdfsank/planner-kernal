@@ -10,15 +10,16 @@ An explicitly enabled JSON planning kernel that persists project goals, stages, 
 
 This repository is a Codex skill. It is activated only when the current conversation explicitly uses `$planner-kernal` or clearly asks to use planner-kernal. Opening the project, mentioning the skill name, or finding an old `tmp_plan/` directory does not initialize a target project.
 
-After activation, the skill root is this repository and the target project root is supplied explicitly by the user. Keep the two roots separate. The shell entry points can also be used directly without Codex.
+After activation, the skill root is this repository and the target project root is supplied explicitly by the user. Keep the two roots separate. The Bash `.sh` entry points can also be used directly without Codex.
 
 ## Features
 
 - **Explicit opt-in**: only `init --explicit` creates runtime state in a target project.
 - **JSON as the source of truth**: `tmp_plan/state.json` stores the current plan; archives and evidence are immutable JSON records.
-- **Strict contracts**: validates JSON Schema, fields, entity relationships, dependency graphs, task gates, and cross-entity references.
-- **Recoverable execution**: `resume` returns the current summary, active tasks, next candidates, and freshness warnings without loading all history.
-- **Revision-bound task packets**: each Task revision binds implementation boundaries, inputs, test sources, a self-check shell, and file hashes.
+- **Architecture-first planning**: requires a reviewed module tree, typed ports, contracts, and connections before Stage or Task decomposition.
+- **Strict contracts**: validates structural schemas, semantic-rule specifications, entity relationships, dependency graphs, planning gates, and cross-entity references.
+- **Recoverable execution**: `resume` separates executable, preparable, and review-ready Tasks from genuine freshness warnings without loading all history.
+- **Revision-bound task packets**: each Task revision binds implementation boundaries, inputs, test sources, a Bash `.sh` self-check script, and file hashes.
 - **Real checks and evidence**: supports built-in `unittest`, JUnit XML, and structured JSON reports; raw reports, logs, and summaries are cross-checked.
 - **Layered acceptance**: a Task self-check does not replace Task review, Stage integration checks, or Goal acceptance.
 - **Concurrency and idempotency protection**: POSIX file locks, global revisions, unique `operation_id` values, request hashes, and SHA-256 bindings prevent blind overwrites.
@@ -106,7 +107,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
 
 ### 3. Apply a plan definition
 
-The sample `definition.json` is a `define_entity` operation containing a Goal, Stage, and Task:
+The sample `definition.json` is a `define_entity` operation containing a Goal, reviewed Architecture, Contract, Module, Stage, and Task:
 
 ```bash
 bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
@@ -130,7 +131,7 @@ All writes use the same operation envelope. This minimal operation makes `TASK-0
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "operation_id": "OP-READY-001",
   "expected_revision": 1,
   "session_id": "",
@@ -187,7 +188,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   --output tmp_plan/packets/TASK-001.json
 ```
 
-The packet contains the Goal, Stage, Task, bound inputs, readiness issues, self-check command, and runner environment hints.
+The packet contains the Goal, Architecture, relevant Modules, Contracts, Connections, Stage, Task, bound inputs, readiness issues, self-check command, and runner environment hints.
 
 The result must be written to a new path under `tmp_plan/`:
 
@@ -213,14 +214,17 @@ After a PASS, register the result with `submit_evidence` and request review. A P
 
 ## Core concepts
 
-### Goal, Stage, Task, and Output
+### Architecture, Module, Contract, Goal, Stage, Task, and Output
 
 | Entity | Purpose | Typical gate |
 | --- | --- | --- |
 | Goal | Defines the final purpose, scope, success criteria, and replanning conditions | The plan cannot complete before Goal acceptance |
+| Architecture | Defines the complete in-scope module tree and connection graph | Must be reviewed, complete, and free of unresolved questions before Stage or Task creation |
+| Module | Defines a stable, locatable, independently replaceable product boundary | Ports reference valid Contracts and every input has one provider |
+| Contract | Defines carrier, schema, semantic rules, error behavior, and side effects | Fingerprint and executable verification specification must match |
 | Stage | Groups related Tasks and defines module/integration checks | All member Tasks must pass before Stage review |
 | Task | The smallest independent execution and acceptance boundary, with implementation steps, file boundaries, and checks | Dependencies, inputs, checks, and Task review must pass |
-| Output | A versioned public contract produced by a Task | Semantic fingerprint, provider, and paths must agree |
+| Output | A versioned delivery produced by a Task for a Module and its Contracts | Semantic fingerprint, provider, Module, Contract bindings, and paths must agree |
 
 The plan also tracks decisions, blockers, acceptances, the execution session, the archive index, and the evidence index.
 
@@ -248,7 +252,7 @@ Every write uses this shape:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "operation_id": "OP-UNIQUE-001",
   "expected_revision": 0,
   "session_id": "",
@@ -302,6 +306,8 @@ Every command requires `--project PROJECT` and prints JSON.
 | `archive` | Convenience entry point for `archive_pending_plan` | Yes |
 | `render` | Return a non-authoritative JSON reading view | No |
 | `export-task` | Export a Task execution packet | Optional; `--output` writes under `tmp_plan/packets/` |
+| `export-module` | Export a Module with its Architecture, Contracts, Connections, consumers, and Tasks | No |
+| `impact` | Report affected Modules, Tasks, and Stages for a Module or Contract | No |
 | `run-check` | Run a specified Task revision in the current execution session | Yes; writes results and raw attachments |
 
 ### Query examples
@@ -495,6 +501,7 @@ Do not overwrite historical results. Rerun the current Task revision; if the con
 ## Related documentation
 
 - [SKILL.md](SKILL.md): Codex entry point, boundaries, and complete workflow;
+- [references/architecture.md](references/architecture.md): module decomposition, contracts, planning gates, and the portfolio-position alignment example;
 - [references/workflow.md](references/workflow.md): responsibilities of planners, executors, and reviewers;
 - [references/contracts.md](references/contracts.md): JSON contracts, CLI, and operation types;
 - [references/self-check.md](references/self-check.md): task checks, adapters, and evidence protocol;
@@ -504,6 +511,6 @@ Do not overwrite historical results. Rerun the current Task revision; if the con
 
 ## Version
 
-Current project version: `0.1.0`.
+Current project version: `0.2.0` using state Schema v2. Schema v1 runtime state is not migrated automatically. Preserve its `tmp_plan/` directory and use the matching Git version to inspect or finish that plan.
 
 No license or release metadata is currently declared in the project. Add an appropriate license, contribution guide, and changelog before external distribution.

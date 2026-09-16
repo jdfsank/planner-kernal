@@ -1,6 +1,6 @@
 interface:
   display_name: "planner-kernal"
-  short_description: "Explicitly enabled JSON project planning kernel with per-module self-checks and cross-conversation recovery"
-  default_prompt: "Use $planner-kernal to create or resume an executable JSON plan for the current project, and plan or implement according to my request."
+  short_description: "Architecture-first JSON planning kernel with module contracts, executable checks, and recovery"
+  default_prompt: "Use $planner-kernal to model replaceable modules and input/output contracts before creating or resuming an executable JSON plan for the current project."
 policy:
   allow_implicit_invocation: false

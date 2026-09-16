@@ -2,9 +2,9 @@
 
 ## Before creating a task
 
-Read the target project's actual implementation, constraints, existing tests, and user requirements. The JSON `goal` defines the objective; external documents are source references, not additional execution authorization. A Stage describes an observable capability, while a Task is an independent implementation and acceptance boundary; keep continuous internal edits as Steps.
+Read the target project's actual implementation, constraints, existing tests, and user requirements. Complete and baseline the Architecture described in [architecture.md](architecture.md) before creating a Stage or Task. The JSON `goal` defines the objective; external documents are source references, not additional execution authorization. A Stage describes an observable capability, while a Task is an independent implementation and acceptance boundary; keep continuous internal edits as Steps.
 
-A Task may contain multiple internal modules but owns one independently versioned public Output contract. Put related API methods in one logical contract object instead of creating a task for each method. Split different public artifacts only when they need independent revisions, consumers, and acceptance.
+A Task references one or more Architecture modules and defines check coverage for each referenced module. Modules have product lifetimes independent of Tasks. A Task Output records a delivery and the module contracts it implements; it does not own the product's module identity.
 
 Each Step should make all four fields concrete:
 
@@ -23,7 +23,7 @@ Avoid instructions such as “improve the module” or “make it correct.” Wh
 
 ## Create and save
 
-Use one `define_entity` operation to submit the mutually referencing Goal, Stage, Task, and initial Output. Defining a task automatically generates its revision-bound shell script, but the planner writes or reuses the business tests and verifies their real entry point before the task reaches ready.
+Use `define_entity` to submit the Goal, Contracts, Modules, Connections, and reviewed Architecture. Only after the Architecture is baselined, define its Stages, Tasks, and initial Outputs. Defining a Task generates its revision-bound `self-check.sh`, but the planner writes or reuses the business tests and verifies their real entry point before the Task reaches ready.
 
 Tasks start as `planned / unknown / pending`, and Stages start as `planned`. Definition does not mean the user approved implementation. When the user wants planning only, `archive_pending_plan` saves a snapshot and clears the execution session. Development plans and verification output are development records, not runtime state in the target project.
 
@@ -33,7 +33,7 @@ Tasks start as `planned / unknown / pending`, and Stages start as `planned`. Def
 2. After the user requests implementation, run `claim_session`; export the current Task and verify its revision and required inputs.
 3. Use `set_ready` to confirm the gates and `start_task` to enter active; edit only owned paths and do not expand the interface or scope.
 4. Implement each Step. If check behavior or an interface must change, return for planner revision instead of weakening assertions to obtain PASS.
-5. Use the task shell script and register the result; repair self-check failures through the diagnostic path. On success, use `request_review`.
+5. Use the Task's `self-check.sh` script and register the result; repair self-check failures through the diagnostic path. On success, use `request_review`.
 6. Return changed files, real check results, evidence IDs, deviations, and incomplete items. Do not claim an independent review was completed.
 
 Pause a conversation with `pause` to save a snapshot and release the session. After a crash, a new conversation cannot take over based only on elapsed time; use a new session ID, the old session ID, and `old_stopped: true` to make the takeover explicit. `old_stopped` is an operator's factual declaration; the kernel cannot prove across hosts that the old agent has stopped.

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from planner_kernel.contracts import KernelError
 from planner_kernel.packets import export_task, require_current_check, resume_context, verify_self_check
-from tests.helpers import Workflow
+from tests.helpers import ROOT, Workflow
 
 
 class PacketsTests(unittest.TestCase):
@@ -36,3 +36,29 @@ class PacketsTests(unittest.TestCase):
             with self.assertRaises(KernelError):require_current_check(w.engine,s,t)
             restored=resume_context(w.engine,w.engine.store.load_state())
             self.assertIn('TASK-001',restored['freshness_warnings'])
+
+    def test_resume_distinguishes_active_work_from_review(self):
+        from planner_kernel.checks import run_checks
+        with tempfile.TemporaryDirectory() as d:
+            w=Workflow(d)
+            w.do('set_ready',{'task_id':'TASK-001'})
+            w.do('claim_session',{'id':'SESSION-001','owner':'test'})
+            w.do('start_task',{'task_id':'TASK-001'})
+            active=resume_context(w.engine,w.engine.store.load_state())
+            self.assertEqual(active['freshness_warnings']['TASK-001'],
+                             ['Active work requires inspection before continuation'])
+            self.assertEqual(active['index']['review_task_ids'],[])
+
+            state=w.engine.store.load_state();task=state['entities']['tasks']['TASK-001']
+            report=run_checks(task,d,'tmp_plan/results/review-ready.json',ROOT)
+            self.assertEqual(report['status'],'PASS')
+            w.do('submit_evidence',{'id':'EVD-REVIEW-READY','path':'tmp_plan/results/review-ready.json'})
+            w.do('request_review',{'task_id':'TASK-001'})
+            review=resume_context(w.engine,w.engine.store.load_state())
+            self.assertEqual(review['index']['review_task_ids'],['TASK-001'])
+            self.assertNotIn('TASK-001',review['freshness_warnings'])
+
+            Path(d,'probe.py').write_text('print("changed")\n')
+            stale=resume_context(w.engine,w.engine.store.load_state())
+            self.assertIn('TASK-001',stale['freshness_warnings'])
+            self.assertEqual(stale['index']['review_task_ids'],[])

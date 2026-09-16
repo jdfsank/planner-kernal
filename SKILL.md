@@ -1,6 +1,6 @@
 ---
 name: planner-kernal
-description: Only when the user explicitly invokes planner-kernal, create or resume a project-local JSON planning kernel with executable task packets, per-task module self-checks, revision-bound evidence and cross-conversation recovery. Merely developing, quoting or mentioning this skill does not enable it on a project.
+description: Only when the user explicitly invokes planner-kernal, model a project's replaceable modules and input/output contracts before creating an executable JSON plan with revision-bound evidence and cross-conversation recovery. Merely developing, quoting or mentioning this skill does not enable it on a project.
 ---
 
 # planner-kernal
@@ -30,12 +30,14 @@ After setup, the CLI and task self-checks run offline through `scripts/planner.s
 ## Planning, execution, and recovery
 
 1. Read the JSON summary from `resume` first, then query goals, the current stage, tasks, and required inputs by ID. Do not load all history by default.
-2. Inspect the actual project before writing the complete task packet. Read [workflow and task method](references/workflow.md); read [contracts and operations](references/contracts.md) when creating or revising JSON.
-3. Every task needs an implementation strategy, interface contracts, concrete steps, file boundaries, module inventory, and real self-check cases. `define_entity` generates the current revision's `self-check.sh`. Keep tasks without real tests in `planned`; never use a placeholder success script.
-4. When the user requests planning only, save the pending JSON snapshot with `archive_pending_plan` and finish. Archiving does not mean acceptance and must not start implementation.
-5. When the user requests implementation, claim an execution session; after dependencies and the task packet pass their gates, use `set_ready` and `start_task`. Execute only the current task packet; return interface or scope conflicts to the planning layer.
-6. Run scripts, register evidence, and request review according to [the self-check and evidence protocol](references/self-check.md). A self-check PASS cannot mark a task passed directly; stage integration and goal acceptance are separate gates.
-7. Save a checkpoint before every plan or state change, completed verification, blocker, and final response. Release the session when pausing. On a new conversation, inspect active work first and do not rerun it automatically.
+2. Inspect the actual project before planning implementation. Read [architecture method](references/architecture.md), then record the complete in-scope module tree, typed ports, contracts, connections, implementation evidence, and unresolved questions.
+3. Baseline the Architecture only after every in-scope module is independently locatable and replaceable, every input is connected, contract rules have verification methods, and the review findings are recorded. The kernel rejects Stages and Tasks without a baselined Architecture.
+4. Read [workflow and task method](references/workflow.md) and derive Stages from observable integration capabilities and Tasks from independent implementation boundaries. Do not copy the module hierarchy mechanically into the task hierarchy.
+5. Every Task binds an Architecture revision and module IDs, and needs an implementation strategy, concrete steps, file boundaries, check coverage, and real self-check cases. `define_entity` generates the current revision's `self-check.sh`. Keep Tasks without real tests in `planned`; never use a placeholder success script.
+6. When the user requests planning only, save the pending JSON snapshot with `archive_pending_plan` and finish. Archiving does not mean acceptance and must not start implementation.
+7. When the user requests implementation, claim an execution session; after dependencies and the Task packet pass their gates, use `set_ready` and `start_task`. Execute only the current Task packet; return interface or scope conflicts to the Architecture.
+8. Run `.sh` scripts, register evidence, and request review according to [the self-check and evidence protocol](references/self-check.md). A self-check PASS cannot mark a Task passed directly; Stage integration and Goal acceptance are separate gates.
+9. Save a checkpoint before every plan or state change, completed verification, blocker, and final response. Release the session when pausing. On a new conversation, inspect active work first and do not rerun it automatically.
 
 JSON contains all authoritative state, archives, and evidence records. `render` only creates a reading view; never edit the view to update state.
 Every operation needs a unique `operation_id` and the current `expected_revision`; retries of the same request must reuse the original operation ID and content.

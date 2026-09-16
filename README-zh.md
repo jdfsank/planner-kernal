@@ -16,9 +16,10 @@
 
 - **显式启用**：只有用户明确执行 `init --explicit` 后，才会在目标项目创建运行时状态。
 - **JSON 是唯一权威状态**：`tmp_plan/state.json` 保存当前计划；归档和证据以不可变 JSON 记录保存。
-- **严格契约**：运行时校验 JSON Schema、字段、实体关系、依赖图、任务门禁和跨实体引用。
-- **可恢复执行**：通过 `resume` 返回当前计划摘要、活动任务、下一步候选和新鲜度警告，不要求加载全部历史。
-- **版本化任务包**：每个 Task revision 都绑定实现边界、输入、测试源码、任务自检脚本和文件哈希。
+- **架构优先规划**：拆分 Stage/Task 前必须建立经过审查的模块树、类型化端口、契约和连接。
+- **严格契约**：运行时校验结构 Schema、语义规则规格、实体关系、依赖图、规划门禁和跨实体引用。
+- **可恢复执行**：通过 `resume` 区分可执行、可准备、待审 Task 和真正的新鲜度警告，不要求加载全部历史。
+- **版本化任务包**：每个 Task revision 都绑定架构版本、实现边界、输入、测试源码、`.sh` 自检脚本和文件哈希。
 - **真实自检与证据**：支持内置 `unittest`、JUnit XML 和结构化 JSON 报告；原始报告、日志和摘要相互校验。
 - **分层验收**：Task 自检不能直接替代 Task 审查、Stage 集成检查或 Goal 验收。
 - **并发与幂等保护**：POSIX 文件锁、全局 revision、唯一 `operation_id`、请求哈希和 SHA-256 记录防止盲目覆盖。
@@ -106,7 +107,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
 
 ### 3. 导入计划定义
 
-样例 `definition.json` 是一个 `define_entity` 操作，包含 Goal、Stage 和 Task。执行：
+样例 `definition.json` 是一个 `define_entity` 操作，包含 Goal、已审查 Architecture、Contract、Module、Stage 和 Task。执行：
 
 ```bash
 bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
@@ -130,7 +131,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "operation_id": "OP-READY-001",
   "expected_revision": 1,
   "session_id": "",
@@ -187,7 +188,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
   --output tmp_plan/packets/TASK-001.json
 ```
 
-任务包会包含 Goal、Stage、Task、输入产物、就绪问题、自检命令和运行器环境提示。
+任务包会包含 Goal、Architecture、相关 Module、Contract、Connection、Stage、Task、输入产物、就绪问题、自检命令和运行器环境提示。
 
 任务的自检结果必须写入 `tmp_plan/` 下一个全新的结果路径：
 
@@ -213,14 +214,17 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
 
 ## 核心概念
 
-### Goal、Stage、Task 和 Output
+### Architecture、Module、Contract、Goal、Stage、Task 和 Output
 
 | 实体 | 作用 | 典型门禁 |
 | --- | --- | --- |
 | Goal | 定义最终目的、范围、成功标准和重规划条件 | 目标验收通过后才能完成计划 |
+| Architecture | 定义当前范围内完整的模块树和连接图 | 完整审查且不存在未决问题后才能创建 Stage/Task |
+| Module | 定义稳定、可定位、可独立替换的产品边界 | 端口引用有效 Contract，且每个输入有唯一提供方 |
+| Contract | 定义载体、结构、语义规则、错误行为和副作用 | 指纹和可执行验证规格必须匹配 |
 | Stage | 组织一组相关任务，定义模块检查和集成检查 | 所有成员 Task 通过后才能进入阶段审查 |
 | Task | 最小独立执行与验收边界，拥有实现步骤、文件边界和自检 | 依赖、输入、自检、Task 审查均通过 |
-| Output | Task 产生的版本化公共契约 | 语义指纹、提供者和路径必须一致 |
+| Output | Task 为 Module 及其 Contract 产生的版本化交付物 | 语义指纹、提供者、Module、Contract 绑定和路径必须一致 |
 
 除此之外，计划还维护 decisions、blockers、acceptances、execution session、archive index 和 evidence index。
 
@@ -248,7 +252,7 @@ Task 状态包括 `planned`、`ready`、`active`、`ready_for_review`、`passed`
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "operation_id": "OP-UNIQUE-001",
   "expected_revision": 0,
   "session_id": "",
@@ -302,6 +306,8 @@ Task 状态包括 `planned`、`ready`、`active`、`ready_for_review`、`passed`
 | `archive` | `archive_pending_plan` 的便捷入口 | 是 |
 | `render` | 返回非权威的 JSON 阅读视图 | 否 |
 | `export-task` | 导出 Task 执行包 | 可选；指定 `--output` 时写入 `tmp_plan/packets/` |
+| `export-module` | 导出 Module 及其 Architecture、Contract、Connection、消费者和 Task | 否 |
+| `impact` | 报告 Module 或 Contract 影响的 Module、Task 和 Stage | 否 |
 | `run-check` | 在当前执行会话中运行指定 Task revision 的自检 | 是；写入结果和原始附件 |
 
 ### 查询示例
@@ -495,6 +501,7 @@ bash scripts/setup.sh
 ## 相关文档
 
 - [SKILL.md](SKILL.md)：在 Codex 中的显式入口、使用边界和完整工作流；
+- [references/architecture.md](references/architecture.md)：模块拆解、契约、规划门禁和持仓业务对齐示例；
 - [references/workflow.md](references/workflow.md)：规划者、执行者和验收者的职责；
 - [references/contracts.md](references/contracts.md)：JSON 契约、CLI 和操作类型；
 - [references/self-check.md](references/self-check.md)：任务自检、报告适配器和证据协议；
@@ -504,6 +511,6 @@ bash scripts/setup.sh
 
 ## 版本
 
-当前项目版本：`0.1.0`。
+当前项目版本：`0.2.0`（状态 Schema v2）。Schema v1 运行时状态不会自动迁移；应保留其 `tmp_plan/`，并使用匹配的 Git 版本读取或完成旧计划。
 
 许可证和发布信息尚未在项目中声明；在对外发布前请补充相应的许可证、贡献指南和变更日志。

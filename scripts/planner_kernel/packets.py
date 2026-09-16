@@ -40,7 +40,7 @@ def verify_self_check(engine,state,task,report,require_pass=True):
     fields={'schema_version','kind','task_id','task_revision','started_at','finished_at','binding',
             'status','exit_code','modules','checks','attachments','error'}
     require(isinstance(report,dict) and set(report)==fields,'Unexpected self-check report fields')
-    require(type(report['schema_version']) is int and report['schema_version']==1 and report['kind']=='self_check','Unknown check report version')
+    require(type(report['schema_version']) is int and report['schema_version']==2 and report['kind']=='self_check','Unknown check report version')
     require(report['task_id']==task['id'] and report['task_revision']==task['revision'],'Old task report','STALE')
     try:
         start=datetime.fromisoformat(report['started_at']);finish=datetime.fromisoformat(report['finished_at'])
@@ -84,7 +84,7 @@ def verify_review(engine,state,report,kind=None,subject=None):
     fields={'schema_version','kind','plan_id','subject_type','subject_id','subject_revision','subject_revisions',
             'status','criteria','method','expected','actual','reviewer','review_mode','bindings','attachments','supersedes'}
     require(isinstance(report,dict) and set(report)==fields,'Unexpected review evidence fields')
-    require(type(report['schema_version']) is int and report['schema_version']==1 and report['kind']=='review','Unknown review version')
+    require(type(report['schema_version']) is int and report['schema_version']==2 and report['kind']=='review','Unknown review version')
     require(report['plan_id']==state['plan_id'],'Evidence belongs to a previous plan','STALE')
     require(report['subject_type'] in ('task','stage','goal'),'Unknown evidence subject type')
     if kind is None:
@@ -161,9 +161,19 @@ def export_task(engine,state,task_id):
     require(task_id in state['entities']['tasks'],'Unknown task')
     task=state['entities']['tasks'][task_id];validate_packet(task)
     stage=state['entities']['stages'][task['stage_id']]
-    return {'schema_version':1,'kind':'execution_packet','project_id':state['project_id'],'plan_id':state['plan_id'],
+    architecture=state['entities']['architectures'][task['architecture_id']]
+    modules={key:copy.deepcopy(state['entities']['modules'][key]) for key in task['module_ids']}
+    contract_ids={port['contract_id'] for module in modules.values()
+                  for port in module['input_ports']+module['output_ports']}
+    connections={key:copy.deepcopy(value) for key,value in state['entities']['connections'].items()
+                 if value['architecture_id']==architecture['id'] and
+                 (value['from_module_id'] in modules or value['to_module_id'] in modules)}
+    return {'schema_version':2,'kind':'execution_packet','project_id':state['project_id'],'plan_id':state['plan_id'],
             'task':copy.deepcopy(task),'stage':copy.deepcopy(stage),
             'goal':copy.deepcopy(state['entities']['goals'][stage['goal_id']]),
+            'architecture':copy.deepcopy(architecture),'modules':modules,
+            'contracts':{key:copy.deepcopy(state['entities']['contracts'][key]) for key in contract_ids},
+            'connections':connections,
             'inputs':{i['output_id']:copy.deepcopy(state['entities']['outputs'][i['output_id']]) for i in task['inputs']},
             'readiness_issues':evaluate_readiness(state,task,engine.store.project),
             'self_check_command':['bash',task['self_check'],'--project',str(engine.store.project),
@@ -172,14 +182,56 @@ def export_task(engine,state,task_id):
             'runner_environment':{'PLANNER_KERNEL_HOME':str(engine.skill_root)}}
 
 
+def export_module(state,module_id):
+    require(module_id in state['entities']['modules'],'Unknown module')
+    e=state['entities'];module=e['modules'][module_id]
+    architecture=e['architectures'][module['architecture_id']]
+    contract_ids={port['contract_id'] for port in module['input_ports']+module['output_ports']}
+    connections={key:copy.deepcopy(value) for key,value in e['connections'].items()
+                 if value['from_module_id']==module_id or value['to_module_id']==module_id}
+    consumers=sorted({value['to_module_id'] for value in connections.values()
+                      if value['from_module_id']==module_id})
+    tasks=sorted(key for key,value in e['tasks'].items() if module_id in value['module_ids'])
+    return {'schema_version':2,'kind':'module_packet','module':copy.deepcopy(module),
+            'architecture':copy.deepcopy(architecture),
+            'contracts':{key:copy.deepcopy(e['contracts'][key]) for key in contract_ids},
+            'connections':connections,'consumer_module_ids':consumers,'task_ids':tasks}
+
+
+def impact_report(state,module_id=None,contract_id=None):
+    require(bool(module_id) != bool(contract_id),'Specify exactly one module or contract')
+    e=state['entities']
+    if module_id:
+        require(module_id in e['modules'],'Unknown module')
+        contract_ids={port['contract_id'] for port in
+                      e['modules'][module_id]['input_ports']+e['modules'][module_id]['output_ports']}
+        module_ids={module_id}
+    else:
+        require(contract_id in e['contracts'],'Unknown contract')
+        contract_ids={contract_id}
+        module_ids={key for key,module in e['modules'].items()
+                    if any(port['contract_id']==contract_id
+                           for port in module['input_ports']+module['output_ports'])}
+    for connection in e['connections'].values():
+        if connection['contract_id'] in contract_ids:
+            module_ids.update((connection['from_module_id'],connection['to_module_id']))
+    task_ids={key for key,task in e['tasks'].items() if set(task['module_ids']) & module_ids}
+    return {'schema_version':2,'module_ids':sorted(module_ids),'contract_ids':sorted(contract_ids),
+            'task_ids':sorted(task_ids),
+            'stage_ids':sorted({e['tasks'][key]['stage_id'] for key in task_ids})}
+
+
 def resume_context(engine,state):
     e=state['entities'];index=query_index(state);warnings={}
     for task in e['tasks'].values():
         if task['status']=='passed':
             try: require_current_check(engine,state,task)
             except KernelError as exc: warnings[task['id']]=[str(exc)]
-        elif task['status'] in ('active','ready_for_review'):
-            warnings[task['id']]=['Interrupted/active work requires inspection before resuming']
+        elif task['status']=='active':
+            warnings[task['id']]=['Active work requires inspection before continuation']
+        elif task['status']=='ready_for_review':
+            try: require_current_check(engine,state,task)
+            except KernelError as exc: warnings[task['id']]=[str(exc)]
         elif task['status']=='ready':
             problems=evaluate_readiness(state,task,engine.store.project)
             if problems: warnings[task['id']]=problems
@@ -187,6 +239,7 @@ def resume_context(engine,state):
     from .kernel import descendants
     affected=descendants(e['tasks'],blocked)
     index['next_task_ids']=[key for key in index['next_task_ids'] if key not in affected]
+    index['review_task_ids']=[key for key in index['review_task_ids'] if key not in affected]
     candidates=[]
     for key,t in e['tasks'].items():
         if t['status'] not in ('planned','failed','blocked','deferred') or key in affected: continue
@@ -196,11 +249,14 @@ def resume_context(engine,state):
     active={key:t for key,t in e['tasks'].items() if t['status'] in ('ready','active','ready_for_review','blocked') or key in candidates}
     stage_ids={t['stage_id'] for t in active.values()}
     goals={e['stages'][key]['goal_id'] for key in stage_ids}
+    architecture_ids={t['architecture_id'] for t in active.values()}
     if not active and state['status'] in ('draft','awaiting_execution'):
         goals=set(e['goals'])
-    return {'schema_version':1,'project_id':state['project_id'],'revision':state['revision'],'status':state['status'],
+        architecture_ids={key for key,value in e['architectures'].items() if value['goal_id'] in goals}
+    return {'schema_version':2,'project_id':state['project_id'],'revision':state['revision'],'status':state['status'],
             'session':state['session'],'checkpoint':state['checkpoint'],'index':index,
             'goals':{key:e['goals'][key] for key in sorted(goals)},
+            'architectures':{key:e['architectures'][key] for key in sorted(architecture_ids)},
             'active_tasks':{key:{field:t[field] for field in ('id','revision','stage_id','objective','status')} for key,t in active.items()},
             'stages':{key:e['stages'][key] for key in sorted(stage_ids)},
             'decisions':e['decisions'],'blockers':e['blockers'],'freshness_warnings':warnings}

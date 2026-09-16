@@ -36,7 +36,7 @@ class SkillTests(unittest.TestCase):
     def test_cli_workflow(self):
         with tempfile.TemporaryDirectory(prefix='planner cli space ') as d:
             w=Workflow(d)
-            self.cli(d,'resume')
+            self.assertIn('ARCH-001',self.cli(d,'resume')['architectures'])
             w.do('archive_pending_plan')
             self.assertEqual(self.cli(d,'resume')['status'],'awaiting_execution')
             w.do('set_ready',{'task_id':'TASK-001'})

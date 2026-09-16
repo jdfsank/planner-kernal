@@ -9,14 +9,15 @@ from .checks import run_checks, verify_check_baseline
 from .contracts import KernelError, canonical, read_json, require, runtime_path, validate_document, write_new
 from .execution import Engine
 from .kernel import validate_state
-from .packets import export_task, resume_context
+from .packets import export_module, export_task, impact_report, resume_context
 
 
 def parser():
-    root=argparse.ArgumentParser(description='Explicit-only project planning kernel (Python 3.10+, POSIX).')
+    root=argparse.ArgumentParser(description='Explicit-only project planning kernel (Python 3.12, POSIX).')
     sub=root.add_subparsers(dest='command',required=True)
     commands={}
-    for name in ('init','resume','query','validate','apply','archive','render','export-task','run-check'):
+    for name in ('init','resume','query','validate','apply','archive','render','export-task',
+                 'export-module','impact','run-check'):
         p=sub.add_parser(name);p.add_argument('--project',required=True)
         commands[name]=p
     commands['init'].add_argument('--explicit',action='store_true',help='Attest current user explicitly enabled planner-kernal')
@@ -25,13 +26,18 @@ def parser():
         commands[name].add_argument('--input',required=True)
         commands[name].add_argument('--expected-revision',type=int)
     commands['query'].add_argument('--id')
-    commands['query'].add_argument('--type',choices=['goals','stages','tasks','outputs','decisions','blockers','acceptances','evidence','archives'])
+    commands['query'].add_argument('--type',choices=['goals','architectures','contracts','modules','connections',
+                                                     'stages','tasks','outputs','decisions','blockers',
+                                                     'acceptances','evidence','archives'])
     commands['query'].add_argument('--status')
     commands['query'].add_argument('--stage')
     commands['query'].add_argument('--subject')
     commands['query'].add_argument('--revision',type=int)
     commands['export-task'].add_argument('--task',required=True)
     commands['export-task'].add_argument('--output')
+    commands['export-module'].add_argument('--module',required=True)
+    commands['impact'].add_argument('--module')
+    commands['impact'].add_argument('--contract')
     commands['run-check'].add_argument('--task',required=True)
     commands['run-check'].add_argument('--task-revision',type=int,required=True)
     commands['run-check'].add_argument('--session',required=True)
@@ -63,7 +69,7 @@ def query(engine,state,args):
 def main(argv=None):
     args=parser().parse_args(argv)
     try:
-        require(sys.version_info >= (3,10),'Python 3.10+ required')
+        require(sys.version_info >= (3,12),'Python 3.12 required')
         engine=Engine(args.project)
         exit_code=0
         if args.command=='init':
@@ -94,6 +100,10 @@ def main(argv=None):
                     output=runtime_path(engine.store.project,args.output)
                     require(output.is_relative_to(engine.store.root/'packets'),'Packets must be written under tmp_plan/packets')
                     write_new(output,canonical(result))
+            elif args.command=='export-module':
+                result=export_module(state,args.module)
+            elif args.command=='impact':
+                result=impact_report(state,args.module,args.contract)
             elif args.command=='run-check':
                 require(state['session'] is not None and state['session']['id']==args.session and state['status']=='executing',
                         'Active execution session required','SESSION')

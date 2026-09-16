@@ -9,4 +9,5 @@ fi
 unset VIRTUAL_ENV UV_PROJECT UV_WORKING_DIRECTORY UV_PYTHON UV_PYTHON_ENVIRONMENT
 export UV_PROJECT_ENVIRONMENT="$ROOT/.venv"
 export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$ROOT/scripts:$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 exec uv run --project "$ROOT" --python "$(cat "$ROOT/.python-version")" --locked --offline --no-dev python "$@"

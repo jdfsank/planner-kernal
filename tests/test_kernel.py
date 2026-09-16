@@ -4,7 +4,8 @@ import unittest
 
 from planner_kernel.contracts import KernelError, fingerprint
 from planner_kernel.kernel import graph_cycle, invalidate_dependents, validate_packet, validate_state
-from tests.helpers import Workflow, goal, stage, task
+from planner_kernel.packets import export_module, export_task, impact_report
+from tests.helpers import Workflow, architecture, goal, stage, task
 
 
 class KernelTests(unittest.TestCase):
@@ -20,7 +21,8 @@ class KernelTests(unittest.TestCase):
         self.assertNotEqual(fingerprint({'x':1}),fingerprint({'x':'1'}))
         with tempfile.TemporaryDirectory() as d:
             w=Workflow(d)
-            out=dict(id='OUT-001',revision=1,task_id='TASK-001',interface_key='value',contract={'value':42},
+            out=dict(id='OUT-001',revision=1,task_id='TASK-001',module_id='MODULE-001',
+                     contract_ids=['CONTRACT-001'],interface_key='value',contract={'value':42},
                      paths=['subject.py'],fingerprint=fingerprint({'value':42}),compatibility='new')
             w.do('define_entity',{'entities':[{'type':'output','value':out}]})
             wrong={**out,'revision':2,'contract':{'value':43},'fingerprint':fingerprint({'value':43}),'compatibility':'compatible'}
@@ -60,9 +62,9 @@ class KernelTests(unittest.TestCase):
     def test_packet_coverage(self):
         with tempfile.TemporaryDirectory() as d:
             t=task(d);validate_packet(t)
-            t['modules'][0]['boundary_required']=True
+            t['check_groups'][0]['boundary_required']=True
             with self.assertRaises(KernelError):validate_packet(t)
-            t=task(d);t['modules'][0]['check_ids']=[]
+            t=task(d);t['check_groups'][0]['check_ids']=[]
             with self.assertRaises(KernelError):validate_packet(t)
 
     def test_revision_isolation(self):
@@ -74,3 +76,32 @@ class KernelTests(unittest.TestCase):
             w.do('revise_entity',{'entities':[{'type':'task','value':t}]})
             w.do('set_ready',{'task_id':'TASK-001'});w.do('start_task',{'task_id':'TASK-001'})
             with self.assertRaises(KernelError):w.do('request_review',{'task_id':'TASK-001'})
+
+    def test_architecture_is_a_planning_gate(self):
+        with tempfile.TemporaryDirectory() as d:
+            w=Workflow(d)
+            state=w.engine.store.load_state()
+            candidate=copy.deepcopy(state)
+            candidate['entities']['architectures']['ARCH-001']['status']='draft'
+            candidate['entities']['architectures']['ARCH-001']['review']=None
+            with self.assertRaises(KernelError):
+                validate_state(candidate)
+
+            candidate=copy.deepcopy(state)
+            candidate['entities']['modules']['MODULE-001']['input_ports'].append(
+                dict(id='PORT-INPUT',name='input',contract_id='CONTRACT-001',
+                     description='Required input'))
+            with self.assertRaises(KernelError):
+                validate_state(candidate)
+
+    def test_module_packets_and_impact_are_architecture_aware(self):
+        with tempfile.TemporaryDirectory() as d:
+            w=Workflow(d);state=w.engine.store.load_state()
+            packet=export_task(w.engine,state,'TASK-001')
+            self.assertEqual(packet['architecture']['id'],'ARCH-001')
+            self.assertEqual(set(packet['modules']),{'MODULE-001'})
+            module=export_module(state,'MODULE-001')
+            self.assertEqual(set(module['contracts']),{'CONTRACT-001'})
+            impact=impact_report(state,contract_id='CONTRACT-001')
+            self.assertEqual(impact['module_ids'],['MODULE-001'])
+            self.assertEqual(impact['task_ids'],['TASK-001'])

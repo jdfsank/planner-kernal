@@ -32,8 +32,8 @@ def descendants(tasks, sources):
 
 def validate_packet(task):
     validate_document(task,'task')
-    modules={m['id']:m for m in task['modules']}; checks={c['id']:c for c in task['checks']}
-    require(len(modules)==len(task['modules']) and len(checks)==len(task['checks']), 'Duplicate module/check IDs')
+    modules={m['module_id']:m for m in task['check_groups']}; checks={c['id']:c for c in task['checks']}
+    require(len(modules)==len(task['check_groups']) and len(checks)==len(task['checks']), 'Duplicate module/check IDs')
     require(task['self_check']==f"tmp_plan/checks/{task['id']}/R{task['revision']:03d}/self-check.sh", 'Wrong revision-bound self-check path')
     for key,module in modules.items():
         own={c['id'] for c in checks.values() if key in c['module_ids']}
@@ -54,6 +54,57 @@ def validate_packet(task):
             require(not overlaps(owned,protected),'Owned path overlaps a protected path')
 
 
+def validate_architecture(state, architecture):
+    """Validate a complete, replaceable product-module map."""
+    e=state['entities']; modules=e['modules']; contracts=e['contracts']
+    require(architecture['goal_id'] in e['goals'], 'Unknown architecture goal')
+    members={key:value for key,value in modules.items()
+             if value['architecture_id']==architecture['id']}
+    require(set(architecture['module_ids'])==set(members),
+            'Architecture module inventory is incomplete')
+    roots={key for key,value in members.items() if not value['parent_id']}
+    require(set(architecture['root_module_ids'])==roots,
+            'Architecture root module inventory is incorrect')
+    graph={key:([value['parent_id']] if value['parent_id'] else [])
+           for key,value in members.items()}
+    graph_cycle(graph)
+    ports={}
+    input_ports=set()
+    for module_id,module in members.items():
+        require(module['input_ports'] or module['output_ports'],
+                'Module requires at least one input or output port: '+module_id)
+        if module['kind']=='existing':
+            require(bool(module['implementation_refs']),
+                    'Existing module requires implementation evidence: '+module_id)
+        require(set(module['dependencies'])<=set(members),
+                'Unknown module dependency: '+module_id)
+        require(module_id not in module['dependencies'], 'Module cannot depend on itself')
+        local=set()
+        for direction,items in (('input',module['input_ports']),('output',module['output_ports'])):
+            for port in items:
+                require(port['id'] not in local, 'Duplicate port ID in module: '+module_id)
+                local.add(port['id'])
+                require(port['contract_id'] in contracts, 'Unknown port contract: '+port['contract_id'])
+                ports[(module_id,port['id'])]=(direction,port['contract_id'])
+                if direction=='input': input_ports.add((module_id,port['id']))
+    connected=set()
+    for connection in e['connections'].values():
+        if connection['architecture_id']!=architecture['id']: continue
+        source=(connection['from_module_id'],connection['from_port_id'])
+        target=(connection['to_module_id'],connection['to_port_id'])
+        require(source in ports and ports[source][0]=='output', 'Invalid connection source')
+        require(target in ports and ports[target][0]=='input', 'Invalid connection target')
+        require(ports[source][1]==connection['contract_id']==ports[target][1],
+                'Connection contract does not match both ports')
+        require(target not in connected, 'Input port has multiple providers')
+        connected.add(target)
+    require(input_ports<=connected, 'Every input port requires exactly one connection')
+    if architecture['status']=='baselined':
+        require(not architecture['unresolved'], 'Baselined architecture has unresolved questions')
+        require(architecture['review'] is not None and bool(architecture['review']['findings'].strip()),
+                'Baselined architecture requires review findings')
+
+
 def validate_state(state):
     validate_document(state)
     e=state['entities']; tasks=e['tasks']; stages=e['stages']; all_ids=set()
@@ -63,12 +114,32 @@ def validate_state(state):
             all_ids.add(key)
     for stage in stages.values():
         require(stage['goal_id'] in e['goals'], 'Unknown stage goal')
+        require(any(architecture['goal_id']==stage['goal_id'] and architecture['status']=='baselined'
+                    for architecture in e['architectures'].values()),
+                'Stage requires a baselined architecture for its goal')
+    for architecture in e['architectures'].values():
+        validate_architecture(state,architecture)
+    for contract in e['contracts'].values():
+        semantic={key:item for key,item in contract.items() if key!='fingerprint'}
+        require(contract['fingerprint']==fingerprint(semantic), 'Incorrect contract fingerprint')
+    for module in e['modules'].values():
+        require(module['architecture_id'] in e['architectures'], 'Unknown module architecture')
+    for connection in e['connections'].values():
+        require(connection['architecture_id'] in e['architectures'], 'Unknown connection architecture')
     graph_cycle({key:s['dependencies'] for key,s in stages.items()})
     graph_cycle({key:t['dependencies'] for key,t in tasks.items()})
     interfaces=set()
     providers=set()
     for output in e['outputs'].values():
         require(output['task_id'] in tasks, 'Unknown output provider')
+        require(output['module_id'] in e['modules'], 'Unknown output module')
+        require(set(output['contract_ids'])<=set(e['contracts']), 'Unknown output contract')
+        require(output['module_id'] in tasks[output['task_id']]['module_ids'],
+                'Output module is outside its provider Task')
+        module=e['modules'][output['module_id']]
+        port_contracts={port['contract_id'] for port in module['input_ports']+module['output_ports']}
+        require(set(output['contract_ids'])<=port_contracts,
+                'Output contract is outside its Module ports')
         require(output['fingerprint']==fingerprint(output['contract']), 'Wrong semantic fingerprint')
         if tasks[output['task_id']]['status'] != 'superseded':
             require(output['interface_key'] not in interfaces, 'Duplicate live public interface')
@@ -82,6 +153,17 @@ def validate_state(state):
     for task in tasks.values():
         validate_packet(task)
         require(task['stage_id'] in stages, 'Unknown task stage')
+        architecture=e['architectures'].get(task['architecture_id'])
+        require(architecture is not None and architecture['status']=='baselined',
+                'Task requires a baselined architecture')
+        require(task['architecture_revision']==architecture['revision'],
+                'Task architecture revision is stale')
+        require(stages[task['stage_id']]['goal_id']==architecture['goal_id'],
+                'Task stage and architecture belong to different goals')
+        require(set(task['module_ids'])<=set(architecture['module_ids']),
+                'Task references a module outside its architecture')
+        require({group['module_id'] for group in task['check_groups']}==set(task['module_ids']),
+                'Every task module requires one check group')
         for binding in task['inputs']:
             require(binding['output_id'] in e['outputs'], 'Unknown input output')
             provider=e['outputs'][binding['output_id']]['task_id']
@@ -215,8 +297,10 @@ def apply_domain(engine,state,pending,operation):
         for entry in data['entities']:
             payload(entry,('type','value'))
             typ=entry['type']; value=copy.deepcopy(entry['value'])
-            require(typ in ('goal','stage','task','output','decision','blocker'), 'Use acceptance operation for results')
-            validate_document(value,typ); registry=e[typ+'s'];old=registry.get(value['id'])
+            require(typ in ('goal','architecture','contract','module','connection','stage','task','output','decision','blocker'),
+                    'Use acceptance operation for results')
+            document_type='product_module' if typ=='module' else typ
+            validate_document(value,document_type); registry=e[typ+'s'];old=registry.get(value['id'])
             if kind=='define_entity':
                 require(old is None and value['revision']==1 and value['id'] not in state['retired_ids'],
                         'New entity requires a project-unique unused ID and revision 1')
@@ -225,9 +309,15 @@ def apply_domain(engine,state,pending,operation):
                 require(typ!='output','Use revise_contract for output changes')
                 if typ=='task':
                     invalidate_dependents(state,{value['id']})
-                elif typ in ('goal','stage'):
+                elif typ in ('goal','architecture','module','contract','connection','stage'):
                     affected={t['id'] for t in e['tasks'].values() if
-                              t['stage_id']==value['id'] or (typ=='goal' and e['stages'][t['stage_id']]['goal_id']==value['id'])}
+                              t['stage_id']==value['id'] or
+                              (typ=='goal' and e['stages'][t['stage_id']]['goal_id']==value['id']) or
+                              (typ=='architecture' and t['architecture_id']==value['id']) or
+                              (typ=='module' and value['id'] in t['module_ids']) or
+                              (typ=='contract' and any(value['id']==port['contract_id']
+                                  for module_id in t['module_ids']
+                                  for port in e['modules'][module_id]['input_ports']+e['modules'][module_id]['output_ports']))}
                     invalidate_dependents(state,affected)
             if typ=='task':
                 require(value['status']=='planned' and value['input_validity']=='unknown' and value['adaptation_status']=='pending',
@@ -242,6 +332,9 @@ def apply_domain(engine,state,pending,operation):
                 path=project_path(store.project,value['self_check'])
                 pending.append((path,shell_bytes(value)))
             if typ=='stage': require(value['status']=='planned','New/revised stage starts planned')
+            if typ=='contract':
+                semantic={key:item for key,item in value.items() if key!='fingerprint'}
+                require(value['fingerprint']==fingerprint(semantic), 'Incorrect contract fingerprint')
             registry[value['id']]=value
     elif kind in ('set_ready','start_task','request_review','rebind_inputs'):
         payload(data,('task_id',),('acknowledge_resume',))
