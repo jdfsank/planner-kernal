@@ -65,10 +65,19 @@ class SkillTests(unittest.TestCase):
                 self.cli(d,'init','--explicit','--no-git-exclude')
                 self.cli(d,'apply','--input',str(Path(d,'definition.json')))
                 from planner_kernel.execution import Engine
+                from planner_kernel.execution_units import basis_snapshot
                 from tests.helpers import operation
                 engine=Engine(d)
-                engine.apply(operation('set_ready',{'task_id':'TASK-001'},revision=1,operation_id='READY'))
-                engine.apply(operation('claim_session',{'id':'DEMO','owner':'example'},revision=2,operation_id='CLAIM'))
+                state=engine.store.load_state();t=state['entities']['tasks']['TASK-001']
+                engine.apply(operation('record_task_readiness',{'task_id':'TASK-001','review':dict(
+                    task_revision=t['revision'],basis=basis_snapshot(state,t),reviewer='example',
+                    review_mode='self_review',verdict='qualified',issues=[],
+                    findings='Inspected implementation, contracts, steps, budget and all real example cases')},
+                    revision=state['revision'],operation_id='PREPARE'))
+                engine.apply(operation('set_ready',{'task_id':'TASK-001'},
+                    revision=engine.store.load_state()['revision'],operation_id='READY'))
+                engine.apply(operation('claim_session',{'id':'DEMO','owner':'example'},
+                    revision=engine.store.load_state()['revision'],operation_id='CLAIM'))
                 self.cli(d,'run-check','--task','TASK-001','--task-revision','1','--session','DEMO','--result','tmp_plan/results/demo.json')
 
     def test_uv_environment(self):

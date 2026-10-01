@@ -6,6 +6,8 @@ Read the target project's actual implementation, constraints, existing tests, an
 
 A Task references one or more Architecture modules and defines check coverage for each referenced module. Modules have product lifetimes independent of Tasks. A Task Output records a delivery and the module contracts it implements; it does not own the product's module identity.
 
+A minimum execution unit is a bounded, verifiable work package with sufficient preparation to execute without inventing major design decisions. It is represented by an ordinary Task and its `execution_unit`, rather than a new node type. Use [execution-units.md](execution-units.md) across architecture preparation, task partitioning, executability review and necessary adjustment. Steps remain dependent internal edits; do not turn each file or function into a Task mechanically.
+
 Each Step should make all four fields concrete:
 
 ```json
@@ -31,7 +33,7 @@ Tasks start as `planned / unknown / pending`, and Stages start as `planned`. Def
 
 1. After explicit enablement, run `resume`; read `freshness_warnings`, next steps, and preparation candidates.
 2. After the user requests implementation, run `claim_session`; export the current Task and verify its revision and required inputs.
-3. Use `set_ready` to confirm the gates and `start_task` to enter active; edit only owned paths and do not expand the interface or scope.
+3. Inspect `execution_preparation`, resolve gaps and record a current `record_task_readiness` review. Use `set_ready` to confirm the gates and `start_task` to enter active; both reject missing, stale or nonqualified preparation. Edit only owned paths and do not expand the interface or scope.
 4. Implement each Step. If check behavior or an interface must change, return for planner revision instead of weakening assertions to obtain PASS.
 5. Use the Task's `self-check.sh` script and register the result; repair self-check failures through the diagnostic path. On success, use `request_review`.
 6. Return changed files, real check results, evidence IDs, deviations, and incomplete items. Do not claim an independent review was completed.
@@ -46,5 +48,7 @@ Pause a conversation with `pause` to save a snapshot and release the session. Af
 - Return implementation defects to the Task, incompatible public contracts to the Output provider, composition failures to the Stage, and changed purpose or scope to the Goal.
 
 `revise_entity` and `revise_contract` archive old data first, then create the revision and propagate invalidation. Old acceptances remain unchanged. Rebinding inputs for an unaccepted task creates a new Task revision; explicitly revise an accepted task first. Compatible artifact revisions must preserve the semantic fingerprint.
+
+For a Task that cannot be executed as planned, record why using `needs_architecture`, `needs_split`, `needs_investigation` or `blocked`. Use `adjust_plan` for atomic mixed creation/revision. Retain the original Task as a bounded assembly/verification Task with its original acceptance criteria and public Output; give it hard dependencies on the implementation prerequisites and explicit criterion coverage. Preserve completed code in a checkpoint and rerun checks against new packets. Every resulting Task must pass preparation again; an assembly label alone does not establish executability.
 
 Do not revive a completed or cancelled plan in place. When the user requests follow-up work, explicitly use `new_plan`; preserve the old archive and evidence index and create a new plan_id. Evidence from the old plan cannot prove the new plan.

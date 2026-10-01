@@ -17,6 +17,7 @@
 - **显式启用**：只有用户明确执行 `init --explicit` 后，才会在目标项目创建运行时状态。
 - **JSON 是唯一权威状态**：`tmp_plan/state.json` 保存当前计划；归档和证据以不可变 JSON 记录保存。
 - **架构优先规划**：拆分 Stage/Task 前必须建立经过审查的模块树、类型化端口、契约和连接。
+- **最小执行单位**：把架构细度、任务边界、可执行审查和原子调整贯通起来；拆分保留原验收要求和公共 Output 提供者。
 - **严格契约**：运行时校验结构 Schema、语义规则规格、实体关系、依赖图、规划门禁和跨实体引用。
 - **可恢复执行**：通过 `resume` 区分可执行、可准备、待审 Task 和真正的新鲜度警告，不要求加载全部历史。
 - **版本化任务包**：每个 Task revision 都绑定架构版本、实现边界、输入、测试源码、`.sh` 自检脚本和文件哈希。
@@ -127,13 +128,13 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
 
 ### 4. 推进一个任务
 
-所有写操作都使用统一的操作信封。下面是把 `TASK-001` 置为可执行的最小操作：
+先导出 `TASK-001`，检查其执行单位与当前 `execution_preparation.review_basis`，再用 `record_task_readiness` 登记实际完成的准备审查。字段和调整示例见 [最小执行单位标准](references/execution-units.md)。缺失、过期或未通过的审查不能进入 ready。完成这一次审查操作后，可以使用以下操作（如有其他写操作，应使用最新全局 revision）：
 
 ```json
 {
   "schema_version": 2,
   "operation_id": "OP-READY-001",
-  "expected_revision": 1,
+  "expected_revision": 2,
   "session_id": "",
   "kind": "set_ready",
   "data": {
@@ -153,6 +154,8 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
 
 ```text
 define_entity
+    ↓
+export-task / record_task_readiness
     ↓
 set_ready
     ↓
@@ -276,6 +279,9 @@ Task 状态包括 `planned`、`ready`、`active`、`ready_for_review`、`passed`
 | --- | --- |
 | `define_entity` | 在一个事务中创建 Goal、Stage、Task 或其他实体 |
 | `revise_entity` | 创建实体新 revision，并传播依赖失效 |
+| `record_task_readiness` | 将可执行审查绑定到当前 Task 和架构事实 |
+| `adjust_plan` | 原子创建/修订实体，拆分时保留验收覆盖 |
+| `revalidate_task` | 同文件后续改动后，用新证据显式更新已通过 Task 的验收 |
 | `archive_pending_plan` | 将尚未执行的计划归档为 `awaiting_execution` |
 | `claim_session` / `take_over_session` | 认领或在明确确认旧会话停止后接管执行会话 |
 | `save_checkpoint` | 保存当前摘要和下一步 |
@@ -503,6 +509,7 @@ bash scripts/setup.sh
 - [SKILL.md](SKILL.md)：在 Codex 中的显式入口、使用边界和完整工作流；
 - [references/architecture.md](references/architecture.md)：模块拆解、契约、规划门禁和持仓业务对齐示例；
 - [references/workflow.md](references/workflow.md)：规划者、执行者和验收者的职责；
+- [references/execution-units.md](references/execution-units.md)：最小执行单位的具体含义、审查/调整方法和评估案例；
 - [references/contracts.md](references/contracts.md)：JSON 契约、CLI 和操作类型；
 - [references/self-check.md](references/self-check.md)：任务自检、报告适配器和证据协议；
 - [schemas/contract.schema.json](schemas/contract.schema.json)：正式 JSON Schema；

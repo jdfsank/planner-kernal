@@ -37,13 +37,22 @@
           "name": "Research finding validator",
           "carrier": "function",
           "format": "Python call",
-          "schema": {"input": {"findings": "array"}, "output": {"valid": "boolean"}},
-          "semantic_rules": [{
-            "id": "RULE-001",
-            "description": "Every finding includes a claim and at least one source reference",
-            "parameters": {},
-            "verification": "Run valid and missing-source probes"
-          }],
+          "schema": {
+            "input": {
+              "findings": "array"
+            },
+            "output": {
+              "valid": "boolean"
+            }
+          },
+          "semantic_rules": [
+            {
+              "id": "RULE-001",
+              "description": "Every finding includes a claim and at least one source reference",
+              "parameters": {},
+              "verification": "Run valid and missing-source probes"
+            }
+          ],
           "error_behavior": "Malformed findings raise ValueError",
           "side_effects": "None",
           "fingerprint": "sha256:e0e2014f9e41bca91098bf32e978eb8032518999201d0827ca9e770bc0b211ea"
@@ -59,10 +68,23 @@
           "name": "Finding validator",
           "kind": "existing",
           "responsibility": "Validate the minimum structured finding contract",
-          "exclusions": ["Verify whether a cited source supports the claim"],
-          "implementation_refs": ["subject.py", "probe.py", "findings.json"],
+          "exclusions": [
+            "Verify whether a cited source supports the claim"
+          ],
+          "implementation_refs": [
+            "subject.py",
+            "probe.py",
+            "findings.json"
+          ],
           "input_ports": [],
-          "output_ports": [{"id": "PORT-VALIDATE", "name": "validator", "contract_id": "CONTRACT-001", "description": "Finding validation function"}],
+          "output_ports": [
+            {
+              "id": "PORT-VALIDATE",
+              "name": "validator",
+              "contract_id": "CONTRACT-001",
+              "description": "Finding validation function"
+            }
+          ],
           "dependencies": [],
           "decomposition_reason": "This is the smallest independently replaceable capability",
           "replaceability_statement": "Any implementation satisfying CONTRACT-001 can replace this module"
@@ -74,13 +96,27 @@
           "id": "ARCH-001",
           "revision": 1,
           "goal_id": "GOAL-001",
-          "scope": ["Structured finding validation"],
-          "evidence_refs": ["subject.py", "probe.py", "findings.json"],
-          "module_ids": ["MODULE-001"],
-          "root_module_ids": ["MODULE-001"],
+          "scope": [
+            "Structured finding validation"
+          ],
+          "evidence_refs": [
+            "subject.py",
+            "probe.py",
+            "findings.json"
+          ],
+          "module_ids": [
+            "MODULE-001"
+          ],
+          "root_module_ids": [
+            "MODULE-001"
+          ],
           "unresolved": [],
           "status": "baselined",
-          "review": {"reviewer": "example-author", "review_mode": "self_review", "findings": "The single module and contract cover the complete example scope"}
+          "review": {
+            "reviewer": "example-author",
+            "review_mode": "self_review",
+            "findings": "The single module and contract cover the complete example scope"
+          }
         }
       },
       {
@@ -115,7 +151,9 @@
           "stage_id": "STAGE-001",
           "architecture_id": "ARCH-001",
           "architecture_revision": 1,
-          "module_ids": ["MODULE-001"],
+          "module_ids": [
+            "MODULE-001"
+          ],
           "objective": "Validate the minimum research-record contract",
           "exclusions": [],
           "context_refs": [],
@@ -218,7 +256,45 @@
           "self_check": "tmp_plan/checks/TASK-001/R001/self-check.sh",
           "status": "planned",
           "input_validity": "unknown",
-          "adaptation_status": "pending"
+          "adaptation_status": "pending",
+          "execution_unit": {
+            "outcome": "Validate the minimum research-record contract",
+            "architecture_basis": [
+              {
+                "module_id": "MODULE-001",
+                "responsibility": "Validate the minimum structured finding contract",
+                "data_flow": "Public call follows CONTRACT-001; subject.py provides the result and probe.py asserts it",
+                "implementation_refs": [
+                  "subject.py"
+                ],
+                "contract_ids": [
+                  "CONTRACT-001"
+                ]
+              }
+            ],
+            "verification": [
+              {
+                "criterion": "Finding with source reference accepted",
+                "check_ids": [
+                  "CHECK-001"
+                ],
+                "review_method": ""
+              },
+              {
+                "criterion": "Missing source rejected",
+                "check_ids": [
+                  "CHECK-002"
+                ],
+                "review_method": ""
+              }
+            ],
+            "granularity_reason": "One observable capability at one public boundary; its internal edits remain Steps",
+            "execution_budget": "Inspect the supplied implementation and run normal/boundary cases in one work session",
+            "stop_conditions": [
+              "Missing implementation evidence",
+              "A contract or acceptance criterion must change"
+            ]
+          }
         }
       }
     ]

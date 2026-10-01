@@ -19,7 +19,7 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" validate --project "$PROJECT_ROOT
 
 `init --explicit` means the user explicitly enabled the skill for this invocation; a script cannot acquire that authorization automatically. Git exclude is the only configuration that initialization may write outside `tmp_plan/`; use `--no-git-exclude` to disable it explicitly.
 
-`validate` returns structural results and freshness warnings separately; structural PASS does not mean functional acceptance PASS. `resume` does not write state and returns currently relevant entities rather than complete history. `preparable_task_ids` are candidates a planner may inspect and try to set ready; they are not directly executable. `review_task_ids` contains Tasks whose current PASS evidence is fresh and whose status is `ready_for_review`; stale review evidence appears in `freshness_warnings` and removes the Task from that list.
+`validate` returns structural results and freshness warnings separately; structural PASS does not mean functional acceptance PASS. `resume` does not write state and returns currently relevant entities rather than complete history. `preparable_task_ids` meet dependency/input/file gates but may lack preparation qualification; inspect `execution_preparation`. `qualified_task_ids` also have a current qualified preparation review; use `set_ready` before execution. `review_task_ids` contains Tasks whose current PASS evidence is fresh and whose status is `ready_for_review`; stale evidence appears in `freshness_warnings` and removes the Task from that list.
 
 ## Write envelope
 
@@ -44,6 +44,8 @@ Use a new ID for every new operation. Retry an original operation with its origi
 |---|---|
 | define_entity | `entities: [{type, value}]`; create Goal, Architecture, Contract, Module, Connection, Stage, Task, Output, Decision, or Blocker entities with initial revision 1. Stage and Task definitions require a baselined Architecture |
 | revise_entity | Same shape; increment an existing entity's revision, and use revise_contract for outputs; reset Task status to planned/unknown/pending |
+| record_task_readiness | `{task_id, review}`; current factual `basis` and Task revision, explicit reviewer/findings/verdict/issues; optional `checkpoint` is required when returning active work for adjustment |
+| adjust_plan | `{reason, mode, entities: [{action, type, value}]}`; mode is `internal_refinement` or `replan`, actions are `create`/`revise`; optional `splits` records prerequisite IDs, requirement coverage and preserved work; optional `checkpoint` is required for affected active work; commit all changes atomically |
 | archive_pending_plan | `{}`; archive as awaiting_execution; resolve active/review work first rather than presenting it as unexecuted |
 | claim_session | `{id, owner}`; claim a session and enter executing when no valid session exists |
 | take_over_session | `{old_id, id, owner, old_stopped: true}`; use a new session ID |
@@ -54,7 +56,8 @@ Use a new ID for every new operation. Retry an original operation with its origi
 | submit_evidence | `{id, path}`; path is a result JSON under tmp_plan, which is validated and registered as an immutable copy |
 | request_review | `{task_id}`; request review with a valid session after current module self-checks PASS |
 | stage_review | `{stage_id, evidence_ids}`; all tasks pass and evidence covers module and integration checks |
-| record_acceptance | `{acceptance}`; a Schema acceptance object bound to revisions, criteria, evidence, and review_mode |
+| record_acceptance | `{acceptance}`; a Schema acceptance object bound to revisions, criteria, evidence, and review_mode; add `revalidation: true` for a Task with pending revalidation and explicitly supersede its current acceptance |
+| revalidate_task | `{task_id}`; with a valid execution session and fresh completed PASS/FAIL, mark a previously passed Task pending renewed acceptance; active same-Stage consumers survive, hard downstream Stage gates freeze; include `checkpoint` if active cross-stage work is affected; rejected renewed acceptance freezes Task consumers |
 | revise_contract | `{output}`; increment the revision, require the fingerprint to match the contract, and preserve semantics for compatible revisions |
 | pause / block / cancel | `{}`; save a snapshot and release the execution session |
 | complete | `{}`; verify that the goal and stages pass, then recheck current tasks and acceptance evidence |
@@ -68,6 +71,8 @@ With a valid session, every operation except claiming or taking over must carry 
 
 Contracts carry typed structure, semantic rules, error behavior, side effects, and a fingerprint of all contract fields except the fingerprint itself. Modules expose typed input and output ports. Every input port must have exactly one Connection whose contract matches both endpoints. Use `query`, `export-module`, and `impact` to locate a module and inspect its consumers before revision.
 
+`execution_unit`, `execution_review` and `decomposition` are optional for reading old v2 state. A Task without execution preparation cannot newly enter ready or active. Revise the packet explicitly to supplement preparation; no migration is automatic. `export-task.execution_preparation.review_basis` is the current factual object to review and bind; copying it without actual review does not establish qualification. The kernel checks references, coverage and freshness, while adequacy of design, budget and granularity requires the declared semantic review. See [execution-units.md](execution-units.md) for operation examples and evaluation cases.
+
 Entity IDs remain unique within a project and are not reused after `new_plan`. Follow-up Tasks use new IDs, avoiding confusion between old packets or `.sh` scripts and same-named, same-revision Tasks in the new plan.
 
 Archives do not reference their own indexes. Persist all new records before atomically committing state; interrupted writes leave unreferenced files in diagnostics. Do not delete them automatically or count them as committed state. Investigate or restore a known copy when a record hash is corrupted; never overwrite history to remove the warning.
@@ -79,5 +84,5 @@ Evidence can use `supersedes` to reference older evidence for the same subject. 
 
 ## Example
 
-Copy the files in the [software](../examples/software/definition.json) or [research](../examples/research/definition.json) directory into a dedicated demonstration project. Each definition includes a reviewed Architecture, Module, and Contract. After explicit init, use apply to submit definition.json, then set_ready, claim_session, and start_task.
+Copy the files in the [software](../examples/software/definition.json) or [research](../examples/research/definition.json) directory into a dedicated demonstration project. Each definition includes a reviewed Architecture, Module, Contract and execution unit. After explicit init, use apply to submit definition.json, export-task to inspect the basis, record_task_readiness, then set_ready, claim_session, and start_task.
 The examples include runnable implementations and positive/negative cases. They demonstrate the protocol but do not replace development of the user's project. The research example validates only the minimum source contract for structured records; it does not prove that cited content supports a claim.

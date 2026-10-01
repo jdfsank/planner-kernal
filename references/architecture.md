@@ -21,6 +21,10 @@ Every module input port has exactly one connection. Both ends of a connection re
 
 An Architecture can be baselined only when its complete in-scope module inventory, roots, contracts, connections, evidence references, and review findings are present, with no unresolved questions. A baselined Architecture is required before any Stage or Task is accepted by the kernel.
 
+Before baselining, derive a representative concrete work package from each changed capability: identify who receives the input, how it flows through the implementation, where changes belong, and how each required behavior will be verified. Apply the [minimum execution unit standard](execution-units.md). If this requires the executor to invent substantial interfaces, data transformations, or ownership boundaries, refine the Architecture or resolve the design question first. A module can remain intact when several sequential Tasks can implement it under an already explicit contract. A Task can also span tightly coupled modules when one result requires coordinated edits and interaction checks.
+
+For an internal refinement, `adjust_plan` can create child Modules, Contracts, Connections and prerequisite Tasks while revising the complete Architecture inventory and original Task in one transaction. Existing public Contracts, Outputs, goal scope and acceptance requirements stay intact in `internal_refinement` mode. Unaffected Task inventory bindings advance without discarding their factual readiness review; changed execution assumptions invalidate affected Tasks and consumers. Changed public behavior uses `replan` and explicit contract/consumer review.
+
 ## Alignment example: portfolio positions
 
 The shared target is: read daily portfolio weights and capital, calculate target positions, and export a position table. Reading or calculation implementations may later be replaced without changing their consumers.

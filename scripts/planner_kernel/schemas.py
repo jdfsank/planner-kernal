@@ -75,6 +75,28 @@ def build_schema():
                          'cwd': text, 'test_sources': array(text, 1), 'expected': text,
                          'timeout_seconds': {'type': 'number', 'minimum': 0.05},
                          'required': {'type': 'boolean'}, 'adapter': enum('unittest', 'junit', 'json')})
+    defs['execution_basis'] = obj({'module_id': ident, 'responsibility': text,
+                                   'data_flow': text, 'implementation_refs': array(text, 1),
+                                   'contract_ids': array(ident, 1)})
+    defs['criterion_verification'] = obj({'criterion': text, 'check_ids': array(ident),
+                                         'review_method': string})
+    defs['execution_unit'] = obj({'outcome': text,
+                                  'architecture_basis': array(ref('execution_basis'), 1),
+                                  'verification': array(ref('criterion_verification'), 1),
+                                  'granularity_reason': text, 'execution_budget': text,
+                                  'stop_conditions': array(text, 1)})
+    defs['task_readiness_review'] = obj({'task_revision': revision, 'basis': mapping,
+                                        'reviewer': text,
+                                        'review_mode': enum('self_review', 'independent'),
+                                        'verdict': enum('qualified', 'needs_architecture', 'needs_split',
+                                                        'needs_investigation', 'blocked'),
+                                        'findings': text, 'issues': strings})
+    defs['split_coverage'] = obj({'criterion': text, 'task_ids': array(ident, 1),
+                                  'check_ids': array(ident), 'review_method': string})
+    defs['decomposition'] = obj({'source_revision': revision, 'reason': text,
+                                 'prerequisite_task_ids': array(ident, 1),
+                                 'coverage': array(ref('split_coverage'), 1),
+                                 'preserved_work': text})
     defs['task'] = obj({**base, 'stage_id': ident, 'architecture_id': ident,
                         'architecture_revision': revision, 'module_ids': array(ident, 1),
                         'objective': text, 'exclusions': strings,
@@ -94,6 +116,11 @@ def build_schema():
                         'adaptation_status': enum('pending', 'compatible', 'adapted',
                                                   'replan_required', 'blocked', 'obsolete')})
     defs['task']['properties']['check_source_hashes']={'type':'object','additionalProperties':text}
+    defs['task']['properties']['execution_unit']=ref('execution_unit')
+    defs['task']['properties']['execution_review']=ref('task_readiness_review')
+    defs['task']['properties']['decomposition']=ref('decomposition')
+    defs['task']['properties']['revalidation_pending']={'type':'boolean'}
+    defs['task']['properties']['execution_steps']['items']['properties']['access']=enum('write', 'read', 'verify')
     defs['output'] = obj({**base, 'task_id': ident, 'module_id': ident,
                           'contract_ids': array(ident, 1), 'interface_key': text,
                           'contract': mapping, 'paths': array(text, 1), 'fingerprint': text,
@@ -136,7 +163,8 @@ def build_schema():
                                           'save_checkpoint', 'submit_evidence', 'request_review',
                                           'record_acceptance', 'revise_contract', 'set_ready',
                                           'rebind_inputs', 'stage_review', 'pause', 'block',
-                                          'cancel', 'complete', 'new_plan'), 'data': mapping})
+                                          'cancel', 'complete', 'new_plan', 'record_task_readiness',
+                                          'adjust_plan', 'revalidate_task'), 'data': mapping})
     defs['test_case'] = obj({'id':text,'status':enum('PASS','FAIL','SKIP','BLOCKED'),'message':string},['id','status'])
     defs['assertion_report'] = obj({'tests':array(ref('test_case'))})
     defs['check_result'] = obj({'check_id':ident,'module_ids':array(ident,1),

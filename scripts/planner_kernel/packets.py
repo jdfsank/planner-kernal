@@ -51,6 +51,7 @@ def verify_self_check(engine,state,task,report,require_pass=True):
     verify_attachments(engine.store.project,report['attachments'])
     if require_pass:
         require(report['status']=='PASS' and not report['error'],'Check did not pass')
+    if report['status'] in ('PASS','FAIL') and not report['error']:
         definitions={check['id']:check for check in task['checks']}
         attached={ref['path'] for ref in report['attachments']}
         for check in report['checks']:
@@ -63,7 +64,7 @@ def verify_self_check(engine,state,task,report,require_pass=True):
                 require(check['tests']==cases,'Summary contradicts raw test report')
                 require(check['status']==classify(cases,check['returncode']),'Check report contradicts actual cases')
         status,modules=summarize_results(task,report['checks'])
-        require(status=='PASS' and modules==report['modules'],'Missing/failed modules')
+        require(status==report['status'] and modules==report['modules'],'Summary contradicts module results')
         current=snapshot(task,engine.store.project,engine.skill_root)
         recorded=copy.deepcopy(report['binding'])
         # An explicitly compatible revision preserves semantic input bindings.
@@ -137,27 +138,39 @@ def register_check_result(engine,state,pending,evidence_id,path):
         'status':report['status'],'plan_id':state['plan_id'],'registered_revision':state['revision']+1}
 
 
-def verify_evidence(engine,state,evidence_id,kind,subject):
+def verify_evidence(engine,state,evidence_id,kind,subject,require_pass=True):
     require(evidence_id in state['evidence_index'],'Unknown evidence ID')
     report=engine.store.read_record(state['evidence_index'][evidence_id])
     if report['kind']=='self_check':
         require(kind=='task','Module self-check cannot stand in for integration or goal evidence')
-        return verify_self_check(engine,state,subject,report)
+        return verify_self_check(engine,state,subject,report,require_pass=require_pass)
     return verify_review(engine,state,report,kind,subject)
 
 
-def require_current_check(engine,state,task):
+def require_current_check(engine,state,task,require_pass=True):
     candidates=[ref for ref in state['evidence_index'].values() if ref['kind']=='self_check'
                 and ref['subject_id']==task['id'] and ref['plan_id']==state['plan_id']
                 and ref['subject_revision']==task['revision']]
     require(bool(candidates),'No current passing check for '+task['id'],'STALE')
     latest=max(candidates,key=lambda ref:ref['registered_revision'])
     report=engine.store.read_record(latest)
-    require(report['status']=='PASS','Latest check is not PASS for '+task['id'],'STALE')
-    return verify_self_check(engine,state,task,report)
+    if require_pass: require(report['status']=='PASS','Latest check is not PASS for '+task['id'],'STALE')
+    return verify_self_check(engine,state,task,report,require_pass=require_pass)
+
+
+def require_current_task_acceptance(engine,state,task):
+    require(not task.get('revalidation_pending'), 'Task revalidation is pending: '+task['id'], 'STALE')
+    records=state['entities']['acceptances'].values()
+    superseded={a['supersedes'] for a in records if a['supersedes']}
+    current=[a for a in records if a['id'] not in superseded and a['subject_type']=='task' and
+             a['subject_id']==task['id'] and a['subject_revision']==task['revision'] and a['result']=='PASS']
+    require(len(current)==1,'No current Task acceptance: '+task['id'],'STALE')
+    require_current_check(engine,state,task)
+    for key in current[0]['evidence_ids']: verify_evidence(engine,state,key,'task',task)
 
 
 def export_task(engine,state,task_id):
+    from .execution_units import readiness_context
     require(task_id in state['entities']['tasks'],'Unknown task')
     task=state['entities']['tasks'][task_id];validate_packet(task)
     stage=state['entities']['stages'][task['stage_id']]
@@ -176,6 +189,7 @@ def export_task(engine,state,task_id):
             'connections':connections,
             'inputs':{i['output_id']:copy.deepcopy(state['entities']['outputs'][i['output_id']]) for i in task['inputs']},
             'readiness_issues':evaluate_readiness(state,task,engine.store.project),
+            'execution_preparation':readiness_context(state,task,engine.store.project),
             'self_check_command':['bash',task['self_check'],'--project',str(engine.store.project),
                                   '--session',state['session']['id'] if state['session'] else '<claim-session-first>',
                                   '--result',f'tmp_plan/results/{task_id}-<unique-run-id>.json'],
@@ -222,10 +236,11 @@ def impact_report(state,module_id=None,contract_id=None):
 
 
 def resume_context(engine,state):
+    from .execution_units import readiness_context
     e=state['entities'];index=query_index(state);warnings={}
     for task in e['tasks'].values():
         if task['status']=='passed':
-            try: require_current_check(engine,state,task)
+            try: require_current_task_acceptance(engine,state,task)
             except KernelError as exc: warnings[task['id']]=[str(exc)]
         elif task['status']=='active':
             warnings[task['id']]=['Active work requires inspection before continuation']
@@ -240,12 +255,17 @@ def resume_context(engine,state):
     affected=descendants(e['tasks'],blocked)
     index['next_task_ids']=[key for key in index['next_task_ids'] if key not in affected]
     index['review_task_ids']=[key for key in index['review_task_ids'] if key not in affected]
-    candidates=[]
+    candidates=[]; qualified=[]
+    preparation={key:readiness_context(state,t,engine.store.project) for key,t in e['tasks'].items()
+                 if t['status'] not in ('passed','superseded')}
     for key,t in e['tasks'].items():
         if t['status'] not in ('planned','failed','blocked','deferred') or key in affected: continue
         candidate=copy.deepcopy(t);candidate.update(input_validity='current',adaptation_status='compatible')
-        if not evaluate_readiness(state,candidate,engine.store.project): candidates.append(key)
+        if not evaluate_readiness(state,candidate,engine.store.project,qualification=False):
+            candidates.append(key)
+            if not preparation[key]['issues']: qualified.append(key)
     index['preparable_task_ids']=sorted(candidates)
+    index['qualified_task_ids']=sorted(qualified)
     active={key:t for key,t in e['tasks'].items() if t['status'] in ('ready','active','ready_for_review','blocked') or key in candidates}
     stage_ids={t['stage_id'] for t in active.values()}
     goals={e['stages'][key]['goal_id'] for key in stage_ids}
@@ -259,4 +279,5 @@ def resume_context(engine,state):
             'architectures':{key:e['architectures'][key] for key in sorted(architecture_ids)},
             'active_tasks':{key:{field:t[field] for field in ('id','revision','stage_id','objective','status')} for key,t in active.items()},
             'stages':{key:e['stages'][key] for key in sorted(stage_ids)},
-            'decisions':e['decisions'],'blockers':e['blockers'],'freshness_warnings':warnings}
+            'decisions':e['decisions'],'blockers':e['blockers'],'freshness_warnings':warnings,
+            'execution_preparation':preparation}

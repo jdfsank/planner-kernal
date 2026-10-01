@@ -15,7 +15,8 @@ def payload(data, required=(), optional=()):
     types={'entities':list,'type':str,'value':dict,'id':str,'owner':str,'old_id':str,
            'old_stopped':bool,'summary':str,'next_steps':list,'reason':str,'task_id':str,
            'acknowledge_resume':bool,'path':str,'stage_id':str,'evidence_ids':list,
-           'acceptance':dict,'output':dict}
+           'acceptance':dict,'output':dict,'review':dict,'revalidation':bool,
+           'mode':str,'splits':list,'checkpoint':dict,'action':str}
     for key,value in data.items():
         if key in types: require(type(value) is types[key],'Invalid payload type: '+key)
         if key in ('id','old_id','task_id','stage_id'): identifier(value)

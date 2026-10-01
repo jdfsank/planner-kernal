@@ -32,6 +32,8 @@ def descendants(tasks, sources):
 
 def validate_packet(task):
     validate_document(task,'task')
+    from .execution_units import validate_unit
+    validate_unit(task)
     modules={m['module_id']:m for m in task['check_groups']}; checks={c['id']:c for c in task['checks']}
     require(len(modules)==len(task['check_groups']) and len(checks)==len(task['checks']), 'Duplicate module/check IDs')
     require(task['self_check']==f"tmp_plan/checks/{task['id']}/R{task['revision']:03d}/self-check.sh", 'Wrong revision-bound self-check path')
@@ -52,6 +54,16 @@ def validate_packet(task):
     for owned in task['ownership']['owned']:
         for protected in task['ownership']['forbidden']+task['ownership']['read_only']:
             require(not overlaps(owned,protected),'Owned path overlaps a protected path')
+    # Legacy v2 packets did not declare Step access. Keep them readable; they must
+    # explicitly add an execution unit (and appropriate access) before new execution.
+    for step in task['execution_steps'] if 'execution_unit' in task else []:
+        allowed = task['ownership']['owned']
+        if step.get('access', 'write') in ('read', 'verify'):
+            allowed = allowed + task['ownership']['read_only'] + task['context_refs']
+        require(any(Path(step['path']) == Path(raw) or Path(raw) in Path(step['path']).parents
+                    for raw in allowed), 'Step path outside its declared access boundary')
+        require(not any(overlaps(step['path'], raw) for raw in task['ownership']['forbidden']),
+                'Step touches a forbidden path')
 
 
 def validate_architecture(state, architecture):
@@ -152,6 +164,8 @@ def validate_state(state):
                         'Output path is not owned by its provider')
     for task in tasks.values():
         validate_packet(task)
+        from .execution_units import validate_decomposition
+        validate_decomposition(state,task)
         require(task['stage_id'] in stages, 'Unknown task stage')
         architecture=e['architectures'].get(task['architecture_id'])
         require(architecture is not None and architecture['status']=='baselined',
@@ -170,9 +184,11 @@ def validate_state(state):
             require(provider in task['dependencies'], 'Input provider must be a hard dependency')
         if task['status'] in ('ready','active','ready_for_review','passed'):
             require(bool(task.get('check_source_hashes')),'Live task lacks frozen check source hashes')
-            require(evaluate_readiness(state,task,check_files=False)==[], 'Task has invalid live dependencies/inputs')
+            require(evaluate_readiness(state,task,check_files=False,qualification=False)==[], 'Task has invalid live dependencies/inputs')
         if task['status']=='passed':
             require(evaluate_acceptance(state,'task',task), 'Passed task lacks current PASS acceptance')
+        if task.get('revalidation_pending'):
+            require(task['status']=='passed', 'Pending revalidation requires a passed Task')
     live=[t for t in tasks.values() if t['status'] in ('ready','active','ready_for_review')]
     for i,task in enumerate(live):
         for other in live[i+1:]:
@@ -207,8 +223,11 @@ def evaluate_acceptance(state,kind,subject):
                for a in state['entities']['acceptances'].values())
 
 
-def evaluate_readiness(state,task,project=None,check_files=True):
+def evaluate_readiness(state,task,project=None,check_files=True,qualification=True):
     issues=[];e=state['entities']
+    if qualification:
+        from .execution_units import review_issues
+        issues.extend(review_issues(state, task, project if check_files else None))
     if task['unresolved']: issues.append('Unresolved planning questions')
     for dep in task['dependencies']:
         if dep not in e['tasks'] or e['tasks'][dep]['status']!='passed': issues.append('Dependency not passed: '+dep)
@@ -244,9 +263,14 @@ def invalidate_dependents(state, direct):
         stage=e['stages'][task['stage_id']]
         if stage['status']!='invalidated': stage['revision']+=1
         stage['status']='invalidated'
-    # Cross-stage gates also freeze downstream stages and their tasks.
+    affected |= invalidate_stage_dependents(state,{tasks[key]['stage_id'] for key in affected})
+    return affected
+
+
+def invalidate_stage_dependents(state, bad):
+    """Freeze cross-stage consumers without invalidating a revalidated provider Task."""
+    e=state['entities'];tasks=e['tasks'];affected=set()
     stage_graph={key:{'dependencies':s['dependencies']} for key,s in e['stages'].items()}
-    bad={tasks[key]['stage_id'] for key in affected}
     for key in descendants(stage_graph,bad)-bad:
         stage=e['stages'][key]
         if stage['status']!='invalidated': stage['revision']+=1
@@ -288,12 +312,13 @@ def revise_output(state,output):
     e['outputs'][output['id']]=output
 
 
-def apply_domain(engine,state,pending,operation):
-    from .packets import register_check_result, require_current_check, verify_evidence
+def apply_domain(engine,state,pending,operation,archive=True):
+    from .packets import (register_check_result, require_current_check,
+                          require_current_task_acceptance, verify_evidence)
     kind,data=operation['kind'],operation['data'];e=state['entities'];store=engine.store
     if kind in ('define_entity','revise_entity'):
         payload(data,('entities',));require(isinstance(data['entities'],list) and data['entities'], 'Entities required')
-        if kind=='revise_entity': archive_snapshot(store,state,pending)
+        if kind=='revise_entity' and archive: archive_snapshot(store,state,pending)
         for entry in data['entities']:
             payload(entry,('type','value'))
             typ=entry['type']; value=copy.deepcopy(entry['value'])
@@ -315,6 +340,8 @@ def apply_domain(engine,state,pending,operation):
                               (typ=='goal' and e['stages'][t['stage_id']]['goal_id']==value['id']) or
                               (typ=='architecture' and t['architecture_id']==value['id']) or
                               (typ=='module' and value['id'] in t['module_ids']) or
+                              (typ=='connection' and set(t['module_ids']) &
+                               {old['to_module_id'],value['to_module_id']}) or
                               (typ=='contract' and any(value['id']==port['contract_id']
                                   for module_id in t['module_ids']
                                   for port in e['modules'][module_id]['input_ports']+e['modules'][module_id]['output_ports']))}
@@ -323,8 +350,14 @@ def apply_domain(engine,state,pending,operation):
                 require(value['status']=='planned' and value['input_validity']=='unknown' and value['adaptation_status']=='pending',
                         'New/revised task must start planned with unknown inputs')
                 validate_packet(value)
+                value.pop('execution_review', None)
+                value.pop('revalidation_pending', None)
                 value['check_source_hashes']={}
-                for raw in value['ownership']['owned']+value['ownership']['read_only']+value['ownership']['forbidden']+value['tested_paths']+value['context_refs']:
+                for raw in (value['ownership']['owned']+value['ownership']['read_only']+
+                            value['ownership']['forbidden']+value['tested_paths']+value['context_refs']+
+                            [s['path'] for s in value['execution_steps']]+
+                            [raw for b in value.get('execution_unit', {}).get('architecture_basis', [])
+                             for raw in b['implementation_refs']]):
                     project_path(store.project,raw)
                 for check in value['checks']:
                     project_path(store.project,check['cwd'])
@@ -336,6 +369,39 @@ def apply_domain(engine,state,pending,operation):
                 semantic={key:item for key,item in value.items() if key!='fingerprint'}
                 require(value['fingerprint']==fingerprint(semantic), 'Incorrect contract fingerprint')
             registry[value['id']]=value
+            if typ=='task' and kind=='define_entity':
+                stage=e['stages'].get(value['stage_id'])
+                if stage and stage['status'] in ('ready_for_integration','ready_for_stage_review','passed'):
+                    stage['revision']+=1
+                    stage['status']='invalidated'
+                    invalidate_stage_dependents(state,{stage['id']})
+    elif kind=='record_task_readiness':
+        from .execution_units import basis_snapshot, preparation_issues
+        payload(data, ('task_id', 'review'), ('checkpoint',))
+        task=e['tasks'].get(data['task_id']);require(task is not None, 'Unknown task')
+        require(task['status'] not in ('passed', 'superseded'), 'Only unfinished Tasks need preparation review')
+        review=copy.deepcopy(data['review']);validate_document(review, 'task_readiness_review')
+        require(review['findings'].strip() and review['reviewer'].strip() and
+                all(issue.strip() for issue in review['issues']), 'Readiness review requires concrete findings and issues')
+        require(review['task_revision']==task['revision'] and review['basis']==basis_snapshot(state,task),
+                'Readiness review does not bind the current Task and architecture facts', 'STALE')
+        if review['verdict']=='qualified':
+            require(not review['issues'] and not task['unresolved'], 'Qualified review contains unresolved issues')
+            require(not preparation_issues(state,task,store.project), 'Execution basis is incomplete')
+        else:
+            require(bool(review['issues']), 'Nonqualified review must identify concrete gaps')
+        archive_snapshot(store,state,pending)
+        if task['status'] in ('ready', 'active', 'ready_for_review') and review['verdict']!='qualified':
+            require(task['status']!='active' or 'checkpoint' in data,
+                    'Checkpoint active work inside the readiness operation before adjustment')
+            invalidate_dependents(state,{task['id']})
+        if 'checkpoint' in data:
+            from .adjustments import checkpoint
+            checkpoint(state,data['checkpoint'])
+        task['execution_review']=review
+    elif kind=='adjust_plan':
+        from .adjustments import adjust_plan
+        adjust_plan(engine,state,pending,operation)
     elif kind in ('set_ready','start_task','request_review','rebind_inputs'):
         payload(data,('task_id',),('acknowledge_resume',))
         task=e['tasks'].get(data['task_id']);require(task is not None,'Unknown task')
@@ -353,6 +419,7 @@ def apply_domain(engine,state,pending,operation):
                 archive_snapshot(store,state,pending)
                 invalidate_dependents(state,{task['id']})
                 task['revision']+=1
+                task.pop('execution_review', None)
                 task['self_check']=f"tmp_plan/checks/{task['id']}/R{task['revision']:03d}/self-check.sh"
                 task['check_source_hashes']={}
                 pending.append((project_path(store.project,task['self_check']),shell_bytes(task)))
@@ -374,7 +441,7 @@ def apply_domain(engine,state,pending,operation):
             verify_check_baseline(task,store.project)
             require(not evaluate_readiness(state,task,store.project),'Task has stale inputs or missing tests')
             for dependency in task['dependencies']:
-                require_current_check(engine,state,e['tasks'][dependency])
+                require_current_task_acceptance(engine,state,e['tasks'][dependency])
             if task['status']=='active': require(data.get('acknowledge_resume') is True,'Review interrupted work before resuming')
             else: validate_transition(task['status'],'active')
             task['status']='active'
@@ -392,7 +459,8 @@ def apply_domain(engine,state,pending,operation):
         stage=e['stages'].get(data['stage_id']);require(stage is not None,'Unknown stage')
         members=[t for t in e['tasks'].values() if t['stage_id']==stage['id'] and t['status']!='superseded']
         require(members and all(t['status']=='passed' for t in members),'Tasks must pass before integration')
-        for member in members: require_current_check(engine,state,member)
+        require(not any(t.get('revalidation_pending') for t in members),'Finish Task revalidation before Stage review')
+        for member in members: require_current_task_acceptance(engine,state,member)
         required=set(stage['module_checks']+stage['integration_checks'])
         covered=set()
         for evidence_id in data['evidence_ids']:
@@ -402,7 +470,8 @@ def apply_domain(engine,state,pending,operation):
         require(required<=covered,'Missing module or integration evidence')
         stage['status']='ready_for_stage_review'
     elif kind=='record_acceptance':
-        payload(data,('acceptance',));a=copy.deepcopy(data['acceptance']);validate_document(a,'acceptance')
+        payload(data,('acceptance',),('revalidation',));a=copy.deepcopy(data['acceptance']);validate_document(a,'acceptance')
+        revalidation=data.get('revalidation',False)
         require(a['id'] not in e['acceptances'] and a['revision']==1,'Acceptance records are immutable')
         subject=e[a['subject_type']+'s'].get(a['subject_id'])
         require(subject is not None and subject['revision']==a['subject_revision'],'Acceptance revision mismatch')
@@ -413,12 +482,19 @@ def apply_domain(engine,state,pending,operation):
                   and record['subject_revision']==a['subject_revision']]
         require(len(previous)<=1,'Ambiguous acceptance history')
         if previous: require(a['supersedes']==previous[0]['id'],'Explicitly supersede the current acceptance')
+        if revalidation:
+            require(a['subject_type']=='task' and subject['status']=='passed' and
+                    subject.get('revalidation_pending') and previous,
+                    'Revalidation requires an existing Task acceptance and a new review')
+        else:
+            require(not subject.get('revalidation_pending'),'Use revalidation acceptance for pending Task review')
         if a['supersedes']:
             replaced=e['acceptances'][a['supersedes']]
             require(replaced['subject_type']==a['subject_type'] and replaced['subject_id']==a['subject_id'],
                     'Cannot supersede an unrelated acceptance')
         evidence=[]
-        for key in a['evidence_ids']: evidence.append(verify_evidence(engine,state,key,a['subject_type'],subject))
+        for key in a['evidence_ids']:
+            evidence.append(verify_evidence(engine,state,key,a['subject_type'],subject,require_pass=a['result']=='PASS'))
         if a['result']=='PASS':
             from .packets import subject_members
             for member in subject_members(state,a['subject_type'],subject):
@@ -430,7 +506,7 @@ def apply_domain(engine,state,pending,operation):
                 require(required <= {criterion for item in evidence for criterion in item.get('criteria',[])},
                         'Evidence does not cover acceptance criteria')
             if a['subject_type']=='task':
-                require(subject['status']=='ready_for_review','Task not ready for review')
+                require(revalidation or subject['status']=='ready_for_review','Task not ready for review')
                 require_current_check(engine,state,subject)
                 subject['status']='passed'
             elif a['subject_type']=='stage':
@@ -440,11 +516,13 @@ def apply_domain(engine,state,pending,operation):
                 stages=[s for s in e['stages'].values() if s['goal_id']==subject['id'] and s['status']!='superseded']
                 require(stages and all(s['status']=='passed' for s in stages),'Goal stages have not passed')
         elif a['subject_type']=='task':
-            require(subject['status']=='ready_for_review','Task not under review')
+            require(revalidation or subject['status']=='ready_for_review','Task not under review')
+            if revalidation: invalidate_dependents(state,{subject['id']})
             subject['status']='failed' if a['result']=='FAIL' else 'blocked'
         elif a['subject_type']=='stage':
             subject['status']='invalidated'
         e['acceptances'][a['id']]=a
+        if revalidation: subject['revalidation_pending']=False
         if a['subject_type']=='task' and a['result']=='PASS':
             name=f"{subject['id']}-R{subject['revision']:03d}-{a['id']}"
             state['archive_index'][name]=store.store_record(pending,'archive/'+name+'.json',{'task':copy.deepcopy(subject),'acceptance':a})
@@ -455,12 +533,38 @@ def apply_domain(engine,state,pending,operation):
         payload(data,('output',));output=copy.deepcopy(data['output']);validate_document(output,'output')
         archive_snapshot(store,state,pending)
         revise_output(state,output)
+    elif kind=='revalidate_task':
+        payload(data, ('task_id',), ('checkpoint',))
+        task=e['tasks'].get(data['task_id']);require(task is not None,'Unknown task')
+        require(state['session'] is not None and state['status']=='executing','Claim execution first','SESSION')
+        require(task['status']=='passed' and evaluate_acceptance(state,'task',task),
+                'Only accepted Tasks can enter revalidation')
+        report=require_current_check(engine,state,task,require_pass=False)
+        require(report['status'] in ('PASS','FAIL') and not report['error'],
+                'Revalidation needs a fresh completed check; resolve blocked/error runs first')
+        require(not evaluate_readiness(state,task,store.project,qualification=False),
+                'Cannot revalidate stale dependencies or inputs')
+        archive_snapshot(store,state,pending)
+        require(not task.get('revalidation_pending'),'Task revalidation already pending')
+        task['revalidation_pending']=True
+        active_before={key for key,t in e['tasks'].items() if t['status']=='active'}
+        stage=e['stages'][task['stage_id']]
+        if stage['status']!='invalidated': stage['revision']+=1
+        stage['status']='invalidated'
+        affected=invalidate_stage_dependents(state,{stage['id']})
+        require(not affected & active_before or 'checkpoint' in data,
+                'Checkpoint active cross-stage work before provider revalidation')
+        if 'checkpoint' in data:
+            from .adjustments import checkpoint
+            checkpoint(state,data['checkpoint'])
     elif kind=='complete':
         payload(data)
         require(e['goals'] and all(evaluate_acceptance(state,'goal',g) for g in e['goals'].values()),'Goals not accepted')
         require(e['stages'] and all(s['status'] in ('passed','superseded') for s in e['stages'].values()),'Stages not complete')
         for task in e['tasks'].values():
-            if task['status']!='superseded': require_current_check(engine,state,task)
+            if task['status']!='superseded':
+                require(not task.get('revalidation_pending'),'Task revalidation is pending')
+                require_current_check(engine,state,task)
         superseded={a['supersedes'] for a in e['acceptances'].values() if a['supersedes']}
         for acceptance in e['acceptances'].values():
             if acceptance['id'] in superseded or acceptance['result']!='PASS': continue

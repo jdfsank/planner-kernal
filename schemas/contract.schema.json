@@ -679,6 +679,250 @@
       ],
       "additionalProperties": false
     },
+    "execution_basis": {
+      "type": "object",
+      "properties": {
+        "module_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+        },
+        "responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "data_flow": {
+          "type": "string",
+          "minLength": 1
+        },
+        "implementation_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "contract_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "module_id",
+        "responsibility",
+        "data_flow",
+        "implementation_refs",
+        "contract_ids"
+      ],
+      "additionalProperties": false
+    },
+    "criterion_verification": {
+      "type": "object",
+      "properties": {
+        "criterion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "check_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+          },
+          "minItems": 0
+        },
+        "review_method": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "criterion",
+        "check_ids",
+        "review_method"
+      ],
+      "additionalProperties": false
+    },
+    "execution_unit": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "architecture_basis": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/execution_basis"
+          },
+          "minItems": 1
+        },
+        "verification": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/criterion_verification"
+          },
+          "minItems": 1
+        },
+        "granularity_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_budget": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stop_conditions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "outcome",
+        "architecture_basis",
+        "verification",
+        "granularity_reason",
+        "execution_budget",
+        "stop_conditions"
+      ],
+      "additionalProperties": false
+    },
+    "task_readiness_review": {
+      "type": "object",
+      "properties": {
+        "task_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "basis": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "reviewer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_mode": {
+          "enum": [
+            "self_review",
+            "independent"
+          ]
+        },
+        "verdict": {
+          "enum": [
+            "qualified",
+            "needs_architecture",
+            "needs_split",
+            "needs_investigation",
+            "blocked"
+          ]
+        },
+        "findings": {
+          "type": "string",
+          "minLength": 1
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "task_revision",
+        "basis",
+        "reviewer",
+        "review_mode",
+        "verdict",
+        "findings",
+        "issues"
+      ],
+      "additionalProperties": false
+    },
+    "split_coverage": {
+      "type": "object",
+      "properties": {
+        "criterion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+          },
+          "minItems": 1
+        },
+        "check_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+          },
+          "minItems": 0
+        },
+        "review_method": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "criterion",
+        "task_ids",
+        "check_ids",
+        "review_method"
+      ],
+      "additionalProperties": false
+    },
+    "decomposition": {
+      "type": "object",
+      "properties": {
+        "source_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prerequisite_task_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,95}$"
+          },
+          "minItems": 1
+        },
+        "coverage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/split_coverage"
+          },
+          "minItems": 1
+        },
+        "preserved_work": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "source_revision",
+        "reason",
+        "prerequisite_task_ids",
+        "coverage",
+        "preserved_work"
+      ],
+      "additionalProperties": false
+    },
     "task": {
       "type": "object",
       "properties": {
@@ -770,6 +1014,13 @@
               "verification": {
                 "type": "string",
                 "minLength": 1
+              },
+              "access": {
+                "enum": [
+                  "write",
+                  "read",
+                  "verify"
+                ]
               }
             },
             "required": [
@@ -926,6 +1177,18 @@
             "type": "string",
             "minLength": 1
           }
+        },
+        "execution_unit": {
+          "$ref": "#/$defs/execution_unit"
+        },
+        "execution_review": {
+          "$ref": "#/$defs/task_readiness_review"
+        },
+        "decomposition": {
+          "$ref": "#/$defs/decomposition"
+        },
+        "revalidation_pending": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1506,7 +1769,10 @@
             "block",
             "cancel",
             "complete",
-            "new_plan"
+            "new_plan",
+            "record_task_readiness",
+            "adjust_plan",
+            "revalidate_task"
           ]
         },
         "data": {

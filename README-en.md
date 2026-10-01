@@ -17,6 +17,7 @@ After activation, the skill root is this repository and the target project root 
 - **Explicit opt-in**: only `init --explicit` creates runtime state in a target project.
 - **JSON as the source of truth**: `tmp_plan/state.json` stores the current plan; archives and evidence are immutable JSON records.
 - **Architecture-first planning**: requires a reviewed module tree, typed ports, contracts, and connections before Stage or Task decomposition.
+- **Minimum execution units**: factual preparation and semantic review connect architecture detail, bounded Task partitioning, execution gates and atomic adjustments; splits preserve original requirements and public Output providers.
 - **Strict contracts**: validates structural schemas, semantic-rule specifications, entity relationships, dependency graphs, planning gates, and cross-entity references.
 - **Recoverable execution**: `resume` separates executable, preparable, and review-ready Tasks from genuine freshness warnings without loading all history.
 - **Revision-bound task packets**: each Task revision binds implementation boundaries, inputs, test sources, a Bash `.sh` self-check script, and file hashes.
@@ -127,13 +128,13 @@ bash "$PLANNER_KERNEL_HOME/scripts/planner.sh" \
 
 ### 4. Move a Task forward
 
-All writes use the same operation envelope. This minimal operation makes `TASK-001` ready:
+First export `TASK-001`, inspect its execution unit and current `execution_preparation.review_basis`, and submit `record_task_readiness` with an actual preparation review. See [the payload and adjustment examples](references/execution-units.md). Missing, stale or nonqualified preparation prevents readiness. After that one review operation, the following operation makes `TASK-001` ready (use the current global revision if you performed other writes):
 
 ```json
 {
   "schema_version": 2,
   "operation_id": "OP-READY-001",
-  "expected_revision": 1,
+  "expected_revision": 2,
   "session_id": "",
   "kind": "set_ready",
   "data": {
@@ -153,6 +154,8 @@ A typical lifecycle is:
 
 ```text
 define_entity
+    ↓
+export-task / record_task_readiness
     ↓
 set_ready
     ↓
@@ -276,6 +279,9 @@ Common operation kinds:
 | --- | --- |
 | `define_entity` | Create Goals, Stages, Tasks, or other entities in one transaction |
 | `revise_entity` | Create an entity revision and propagate dependency invalidation |
+| `record_task_readiness` | Bind explicit executability review to current Task and architecture facts |
+| `adjust_plan` | Atomically create/revise entities and split with preserved acceptance coverage |
+| `revalidate_task` | Reopen accepted Task evidence for explicit refreshed acceptance after same-file edits |
 | `archive_pending_plan` | Archive an unexecuted plan as `awaiting_execution` |
 | `claim_session` / `take_over_session` | Claim or explicitly take over an execution session |
 | `save_checkpoint` | Save a summary and next steps |

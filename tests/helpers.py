@@ -65,6 +65,14 @@ def task(project, task_id='TASK-001', module='MODULE-001'):
                     argv=['{python}', 'probe.py', '{report}'], cwd='.', test_sources=['probe.py'],
                     expected='value equals 42', timeout_seconds=3, required=True, adapter='json')],
                 tested_paths=['subject.py'], acceptance_criteria=['Returns 42'], failure_routes=['Repair subject'],
+                execution_unit=dict(outcome='The public value returns 42',
+                  architecture_basis=[dict(module_id=module,responsibility='Provide the integer result',
+                    data_flow='Read subject.value through CONTRACT-001',implementation_refs=['subject.py'],
+                    contract_ids=['CONTRACT-001'])],
+                  verification=[dict(criterion='Returns 42',check_ids=['CHECK-001'],review_method='')],
+                  granularity_reason='One constant and one observable result; no independent prerequisite',
+                  execution_budget='One bounded edit and probe; reassess if a new interface is required',
+                  stop_conditions=['Unexpected caller or interface change']),
                 handoff=['Result and report'], unresolved=[],
                 self_check=f'tmp_plan/checks/{task_id}/R001/self-check.sh', status='planned',
                 input_validity='unknown', adaptation_status='pending')
@@ -92,7 +100,18 @@ class Workflow:
                    {'type':'architecture','value':architecture()},{'type':'stage','value':stage()},
                    {'type':'task','value':self.task}]})
 
-    def do(self,kind,data=None):
+    def prepare(self,task_id='TASK-001',verdict='qualified',issues=None,checkpoint=None):
+        from planner_kernel.execution_units import basis_snapshot
+        state=self.engine.store.load_state();t=state['entities']['tasks'][task_id]
+        data={'task_id':task_id,'review':dict(task_revision=t['revision'],basis=basis_snapshot(state,t),
+              reviewer='test',review_mode='self_review',verdict=verdict,
+              findings='One result, explicit location and contract, bounded edit, and criterion covered by probe',
+              issues=issues or [])}
+        if checkpoint is not None:data['checkpoint']=checkpoint
+        return self.do('record_task_readiness',data)
+
+    def do(self,kind,data=None,prepare=True):
+        if kind=='set_ready' and prepare and isinstance(data.get('task_id'),str):self.prepare(data['task_id'])
         self.n+=1; state=self.engine.store.load_state()
         return self.engine.apply(operation(kind,data,revision=state['revision'],
             session=state['session']['id'] if state['session'] else '',operation_id=f'OP-{self.n:03d}'))
